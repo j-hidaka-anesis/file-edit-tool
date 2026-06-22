@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ファイル編集ツール</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- PDF.js & jsPDF (PDF編集用・プレビューレンダリング用・圧縮用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- PDF-Lib (結合用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  
+  <!-- heic2any (HEIC -> JPG 変換用) -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+
+  <style>
+    /* 編集ツールのスタイル */
+    .annotation {
+      position: absolute;
+      cursor: grab;
+      transform-origin: top left;
+      box-sizing: border-box;
+      border: 2px solid transparent; 
+    }
+    .annotation.selected::after {
+      content: '';
+      position: absolute;
+      inset: -2px; 
+      border: 2px dashed #6366f1; 
+      pointer-events: none;
+      z-index: 20;
+      border-radius: 4px;
+    }
+    .annotation.grabbing { cursor: grabbing; }
+    
+    .annotation-content-text {
+      padding: 2px;
+      font-family: sans-serif;
+      line-height: 1.2;
+      white-space: pre-wrap;
+      user-select: none;
+    }
+    .annotation-textarea {
+      font-size: inherit; color: inherit; font-family: inherit; line-height: inherit;
+      background: transparent; border: none; outline: none; resize: none;
+      padding: 0; margin: 0; min-width: 100px; display: block;
+    }
+    
+    .annotation-content-image {
+      width: 100%; height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* リサイズハンドルのスタイル */
+    .resize-handle {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background-color: #ffffff;
+      border: 2px solid #6366f1;
+      border-radius: 50%;
+      z-index: 30;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+      transition: transform 0.15s ease;
+    }
+    .resize-handle:hover { transform: scale(1.2); }
+    .resize-handle-br { bottom: -7px; right: -7px; cursor: nwse-resize; }
+    .resize-handle-bl { bottom: -7px; left: -7px; cursor: nesw-resize; }
+    .resize-handle-tr { top: -7px; right: -7px; cursor: nesw-resize; }
+    .resize-handle-tl { top: -7px; left: -7px; cursor: nwse-resize; }
+
+    /* D&Dゾーンのスタイル */
+    #merger-drop-zone, #converter-drop-zone, #compressor-drop-zone { transition: all 0.2s ease-in-out; }
+    
+    /* カスタムスクロールバー非表示 */
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 h-screen flex flex-col overflow-hidden">
+
+  <!-- ==================== ドラッグ＆ドロップ時のオーバーレイ ==================== -->
+  <div id="drop-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center pointer-events-none transition-opacity">
+    <div class="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center pointer-events-none transform transition-transform scale-100 animate-in zoom-in-95 duration-200">
+      <i data-lucide="file-up" class="w-16 h-16 text-indigo-500 mb-4 animate-bounce"></i>
+      <p class="text-2xl font-bold text-slate-800 tracking-tight">ファイルをここにドロップ</p>
+    </div>
+  </div>
+
+  <!-- ==================== グローバルヘッダー ==================== -->
+  <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3.5 flex items-center justify-between z-30 shrink-0 sticky top-0">
+    <div class="flex items-center gap-3 cursor-pointer group" onclick="switchTab('home')">
+      <div class="bg-gradient-to-br from-indigo-500 to-blue-600 p-2 rounded-xl text-white shadow-sm transition-transform group-hover:scale-105">
+        <i data-lucide="blocks" class="w-5 h-5"></i>
+      </div>
+      <h1 class="text-xl font-bold text-slate-800 hidden xl:block tracking-tight group-hover:text-indigo-600 transition-colors">ファイル編集ツール</h1>
+    </div>
+    
+    <!-- タブナビゲーション -->
+    <div class="flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/50 shadow-inner overflow-x-auto hide-scrollbar">
+      <button id="tab-home" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 bg-white text-indigo-700 shadow-sm ring-1 ring-slate-900/5 whitespace-nowrap">
+        <div class="flex items-center gap-2"><i data-lucide="home" class="w-4 h-4"></i> ホーム</div>
+      </button>
+      <button id="tab-merger" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
+        <div class="flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4"></i> PDFファイル結合</div>
+      </button>
+      <button id="tab-editor" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
+        <div class="flex items-center gap-2"><i data-lucide="file-edit" class="w-4 h-4"></i> PDF編集</div>
+      </button>
+      <button id="tab-compressor" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
+        <div class="flex items-center gap-2"><i data-lucide="file-down" class="w-4 h-4"></i> PDF圧縮</div>
+      </button>
+      <button id="tab-converter" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
+        <div class="flex items-center gap-2"><i data-lucide="image" class="w-4 h-4"></i> HEIC→JPG変換</div>
+      </button>
+    </div>
+    
+    <!-- ヘッダー右側のアクションボタンエリア -->
+    <div class="flex items-center gap-4 lg:min-w-[200px] justify-end">
+      <div id="editor-actions" class="flex items-center gap-2 sm:gap-3 hidden">
+        <label class="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 sm:px-4 rounded-xl flex items-center gap-2 transition-all shadow-sm font-semibold text-sm">
+          <i data-lucide="upload" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">PDFを開く</span>
+          <input type="file" id="upload-input" accept="application/pdf" class="hidden" />
+        </label>
+        <button id="export-btn" disabled class="px-3 py-2 sm:px-4 rounded-xl flex items-center gap-2 font-semibold text-sm transition-all shadow-sm bg-slate-100 text-slate-400 cursor-not-allowed">
+          <i data-lucide="download" id="export-icon" class="w-4 h-4"></i>
+          <div id="export-spinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          <span class="hidden sm:inline">PDF保存</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== メインコンテンツエリア ==================== -->
+  <div class="flex-1 relative overflow-hidden">
+    
+    <!-- ------------------ 0. ホームビュー ------------------ -->
+    <div id="view-home" class="absolute inset-0 bg-slate-50 flex-col items-center justify-start p-6 pt-6 md:pt-10 overflow-y-auto z-10 flex">
+      <div class="max-w-6xl w-full py-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <!-- PDFファイル結合カード -->
+          <button onclick="switchTab('merger')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-blue-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative z-10 flex flex-col items-center">
+              <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="layers" class="w-10 h-10"></i>
+              </div>
+              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-blue-700 transition-colors tracking-tight">PDFファイル結合</h3>
+              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">複数のPDFをまとめて1つのファイルに結合。ページ指定や並び替えも可能。</p>
+            </div>
+          </button>
+
+          <!-- 編集カード -->
+          <button onclick="switchTab('editor')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-indigo-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+            <div class="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative z-10 flex flex-col items-center">
+              <div class="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="file-edit" class="w-10 h-10"></i>
+              </div>
+              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-indigo-700 transition-colors tracking-tight">PDF編集</h3>
+              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">PDF上にテキスト、画像、図形を自由に配置。白塗りで不要な箇所を隠して保存。</p>
+            </div>
+          </button>
+
+          <!-- PDF圧縮カード -->
+          <button onclick="switchTab('compressor')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-violet-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+            <div class="absolute inset-0 bg-gradient-to-br from-violet-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative z-10 flex flex-col items-center">
+              <div class="w-20 h-20 bg-violet-100 text-violet-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="file-down" class="w-10 h-10"></i>
+              </div>
+              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-violet-700 transition-colors tracking-tight">PDF圧縮</h3>
+              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">PDFのファイルサイズを最適化。画質設定を選択するだけで軽量化して保存。</p>
+            </div>
+          </button>
+
+          <!-- HEIC→JPG変換カード -->
+          <button onclick="switchTab('converter')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-emerald-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+            <div class="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative z-10 flex flex-col items-center">
+              <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="image" class="w-10 h-10"></i>
+              </div>
+              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-emerald-700 transition-colors tracking-tight">HEIC→JPG変換</h3>
+              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">iPhone等で撮影されたHEIC画像を、一般的なJPG画像に一括で高速変換。</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------ 1. PDF編集ビュー ------------------ -->
+    <div id="view-editor" class="absolute inset-0 hidden">
+      <!-- サイドバー -->
+      <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 shrink-0">
+        <div class="p-5 border-b border-slate-100">
+          <h2 class="font-bold text-slate-800 mb-4 text-sm tracking-tight">ツール</h2>
+          <div class="space-y-3">
+            <button id="add-text-btn" disabled class="w-full bg-white hover:bg-indigo-50/50 text-slate-700 border border-slate-200 shadow-sm px-3 py-2.5 rounded-xl flex items-center justify-start gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold hover:border-indigo-300 group">
+              <div class="bg-indigo-50 text-indigo-600 p-2 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                <i data-lucide="type" class="w-4 h-4"></i>
+              </div>
+              テキストを追加
+            </button>
+            <label id="add-image-label" class="cursor-pointer w-full bg-white hover:bg-indigo-50/50 text-slate-700 border border-slate-200 shadow-sm px-3 py-2.5 rounded-xl flex items-center justify-start gap-3 transition-all opacity-50 pointer-events-none text-sm font-semibold hover:border-indigo-300 group">
+              <div class="bg-indigo-50 text-indigo-600 p-2 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                <i data-lucide="image" class="w-4 h-4"></i>
+              </div>
+              画像を追加
+              <input type="file" id="add-image-input" accept="image/png, image/jpeg, image/webp" class="hidden" disabled />
+            </label>
+            <button id="add-shape-btn" disabled class="w-full bg-white hover:bg-indigo-50/50 text-slate-700 border border-slate-200 shadow-sm px-3 py-2.5 rounded-xl flex items-center justify-start gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold hover:border-indigo-300 group">
+              <div class="bg-indigo-50 text-indigo-600 p-2 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                <i data-lucide="square" class="w-4 h-4"></i>
+              </div>
+              図形（四角）を追加
+            </button>
+          </div>
+        </div>
+
+        <div class="p-5 flex-1 overflow-y-auto bg-slate-50/50">
+          <h2 class="font-bold text-slate-800 mb-4 text-sm tracking-tight">プロパティ</h2>
+          
+          <div id="prop-empty" class="text-sm text-slate-400 text-center py-12 block bg-white rounded-2xl border border-dashed border-slate-200 shadow-sm flex flex-col items-center justify-center">
+            <div class="bg-slate-50 p-3 rounded-full mb-3">
+              <i data-lucide="mouse-pointer-click" class="w-6 h-6 text-slate-400"></i>
+            </div>
+            <p class="font-medium">要素を選択すると<br/>プロパティが表示されます</p>
+          </div>
+          
+          <div id="prop-panel" class="hidden space-y-5 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            
+            <!-- ====== テキスト用プロパティ ====== -->
+            <div id="prop-group-text" class="space-y-4 hidden">
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 mb-1.5 flex justify-between items-center">
+                  テキスト
+                  <span class="text-[10px] font-normal text-slate-400">※ダブルクリックでも編集可</span>
+                </label>
+                <textarea id="prop-text" class="w-full border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 min-h-[80px] bg-slate-50 focus:bg-white transition-colors"></textarea>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">文字サイズ</label>
+                  <input type="number" id="prop-font-size" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">文字色</label>
+                  <div class="w-full h-[38px] border border-slate-200 rounded-lg overflow-hidden flex items-center focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all">
+                    <input type="color" id="prop-color" class="w-[150%] h-[150%] -ml-[25%] -mt-[25%] cursor-pointer bg-transparent" />
+                  </div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">フォント</label>
+                  <select id="prop-font-family" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors">
+                    <option value="sans-serif">ゴシック体</option>
+                    <option value="serif">明朝体</option>
+                    <option value="monospace">等幅</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">背景色</label>
+                  <select id="prop-bg-color" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors">
+                    <option value="transparent">透明</option>
+                    <option value="#ffffff">白</option>
+                    <option value="#fef08a">黄色</option>
+                    <option value="#000000">黒</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- ====== 画像/図形共通 サイズプロパティ ====== -->
+            <div id="prop-group-size" class="grid grid-cols-2 gap-4 hidden border-b border-slate-100 pb-4 mb-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 mb-1.5">幅 (px)</label>
+                <input type="number" id="prop-width" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 mb-1.5">高さ (px)</label>
+                <input type="number" id="prop-height" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors" />
+              </div>
+            </div>
+
+            <!-- ====== 図形用プロパティ ====== -->
+            <div id="prop-group-shape" class="space-y-4 hidden">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">塗りつぶし色</label>
+                  <div class="flex flex-col gap-2">
+                    <div class="w-full h-[38px] border border-slate-200 rounded-lg overflow-hidden flex items-center focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all" id="prop-fill-color-wrapper">
+                      <input type="color" id="prop-fill-color" class="w-[150%] h-[150%] -ml-[25%] -mt-[25%] cursor-pointer bg-transparent" />
+                    </div>
+                    <label class="flex items-center gap-2 mt-1 text-xs font-medium text-slate-600 cursor-pointer hover:text-indigo-600 transition-colors">
+                      <input type="checkbox" id="prop-fill-transparent" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/50" />
+                      <span>透明にする</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1.5">枠線色</label>
+                  <div class="flex flex-col gap-2">
+                    <div class="w-full h-[38px] border border-slate-200 rounded-lg overflow-hidden flex items-center focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all" id="prop-stroke-color-wrapper">
+                      <input type="color" id="prop-stroke-color" class="w-[150%] h-[150%] -ml-[25%] -mt-[25%] cursor-pointer bg-transparent" />
+                    </div>
+                    <label class="flex items-center gap-2 mt-1 text-xs font-medium text-slate-600 cursor-pointer hover:text-indigo-600 transition-colors">
+                      <input type="checkbox" id="prop-stroke-transparent" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/50" />
+                      <span>透明にする</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-slate-100">
+                <div class="flex justify-between items-center mb-2">
+                  <label class="block text-xs font-semibold text-slate-500">枠線の太さ</label>
+                  <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded" id="prop-stroke-width-val">2px</span>
+                </div>
+                <input type="range" id="prop-stroke-width" min="0" max="20" class="w-full accent-indigo-600" />
+              </div>
+            </div>
+
+            <!-- 共通: 削除ボタン -->
+            <button id="prop-delete-btn" class="w-full mt-6 flex items-center justify-center gap-2 text-red-600 bg-red-50 hover:bg-red-100 px-4 py-3 rounded-xl transition-colors text-sm font-bold border border-red-100 hover:border-red-200">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              この要素を削除
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- キャンバスエリア -->
+      <main id="main-area" class="flex-1 overflow-auto relative p-8 flex justify-center cursor-default bg-slate-100 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px]">
+        
+        <div id="no-pdf-msg" class="flex flex-col items-center justify-center h-full text-slate-400">
+          <div class="bg-white p-6 rounded-full shadow-sm mb-4">
+            <i data-lucide="file-edit" class="w-12 h-12 text-slate-300"></i>
+          </div>
+          <p class="text-lg font-medium">右上のボタンからPDFを開いてください</p>
+        </div>
+
+        <div id="pdf-viewer" class="flex-col items-center hidden pb-32">
+          <div id="canvas-wrapper" class="relative bg-white shadow-[0_8px_30px_rgb(0,0,0,0.08)] origin-top ring-1 ring-slate-900/5 transition-transform duration-200 ease-out">
+            <canvas id="pdf-canvas" class="block pointer-events-none"></canvas>
+            <div id="annotations-container" class="absolute inset-0 pointer-events-none z-10"></div>
+          </div>
+          
+          <div class="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.2)] border border-white/10 px-5 py-2.5 flex items-center gap-6 z-40">
+            <div class="flex items-center gap-2">
+              <button id="prev-btn" class="p-2 hover:bg-white/15 text-slate-200 hover:text-white rounded-full disabled:opacity-30 transition-colors">
+                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+              </button>
+              <span id="page-info" class="text-sm font-bold w-16 text-center text-white">1 / 1</span>
+              <button id="next-btn" class="p-2 hover:bg-white/15 text-slate-200 hover:text-white rounded-full disabled:opacity-30 transition-colors">
+                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+              </button>
+            </div>
+            <div class="w-px h-6 bg-white/20"></div>
+            <div class="flex items-center gap-2">
+              <button id="zoom-out-btn" class="p-2 hover:bg-white/15 text-slate-200 hover:text-white rounded-full transition-colors">
+                <i data-lucide="zoom-out" class="w-5 h-5"></i>
+              </button>
+              <span id="zoom-info" class="text-sm font-bold w-14 text-center text-white">120%</span>
+              <button id="zoom-in-btn" class="p-2 hover:bg-white/15 text-slate-200 hover:text-white rounded-full transition-colors">
+                <i data-lucide="zoom-in" class="w-5 h-5"></i>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+
+    <!-- ------------------ 2. PDFファイル結合ビュー ------------------ -->
+    <div id="view-merger" class="absolute inset-0 bg-slate-50 overflow-y-auto hidden">
+      <div class="p-4 sm:px-8 sm:py-4">
+        <div class="max-w-6xl mx-auto space-y-6 pb-12">
+          
+          <div class="text-center space-y-3">
+            <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">PDFをひとつにまとめる</h2>
+            <p class="text-slate-500 font-medium">複数のPDFファイルを結合します。順番やページ範囲の指定も可能です。</p>
+          </div>
+
+          <div id="merger-error-alert" class="hidden bg-red-50 text-red-700 p-4 rounded-2xl flex items-start gap-3 border border-red-200 shadow-sm animate-in fade-in slide-in-from-top-4">
+            <i data-lucide="alert-circle" class="flex-shrink-0 mt-0.5 w-5 h-5 text-red-500"></i>
+            <p id="merger-error-message" class="text-sm font-semibold"></p>
+          </div>
+
+          <div id="merger-success-alert" class="hidden bg-emerald-50 text-emerald-700 p-4 rounded-2xl flex items-start gap-3 border border-emerald-200 shadow-sm animate-in fade-in slide-in-from-top-4">
+            <i data-lucide="check-circle-2" class="flex-shrink-0 mt-0.5 w-5 h-5 text-emerald-500"></i>
+            <p class="text-sm font-semibold">PDFの結合が完了し、ダウンロードが開始されました！</p>
+          </div>
+
+          <div id="merger-drop-zone" class="relative border-2 border-dashed border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full">
+            <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <input type="file" id="merger-file-input" multiple accept="application/pdf" class="hidden" />
+            <div id="merger-drop-zone-content" class="relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300">
+              <div id="merger-drop-zone-icon" class="p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1">
+                <i id="merger-drop-zone-icon-svg" data-lucide="upload-cloud" class="w-12 h-12 transition-all duration-300"></i>
+              </div>
+              <div id="merger-drop-zone-text-container" class="space-y-1 text-center transition-all duration-300">
+                <p id="merger-drop-zone-text-title" class="text-xl font-bold text-slate-700 group-hover:text-blue-700 transition-colors">結合するPDFを選択</p>
+                <p id="merger-drop-zone-text-sub" class="text-sm font-medium text-slate-400 transition-all duration-300 block">または、ここにファイルをドラッグ＆ドロップ</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="merger-file-list-container" class="hidden bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-200/60 overflow-hidden flex flex-col">
+            <div class="p-4 sm:p-5 border-b border-slate-100 bg-white grid grid-cols-1 sm:grid-cols-3 items-center gap-4 shrink-0">
+              <h2 class="font-bold text-slate-700 flex items-center gap-2 justify-self-center sm:justify-self-start">
+                結合するファイル 
+                <span id="merger-file-count" class="bg-blue-50 text-blue-600 text-xs px-2.5 py-1 rounded-full font-bold">0</span>
+              </h2>
+              <div class="flex justify-center justify-self-center w-full">
+                <button id="merger-merge-btn" class="text-sm py-2.5 px-6 w-full max-w-[280px] rounded-xl text-white font-bold flex items-center justify-center gap-2 transition-all shadow-sm bg-slate-300 cursor-not-allowed" disabled>
+                  <span id="merger-merge-btn-content" class="flex items-center gap-2"></span>
+                </button>
+              </div>
+              <div class="flex justify-center sm:justify-end justify-self-center sm:justify-self-end w-full">
+                <button id="merger-clear-all-btn" class="text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg font-bold transition-colors shrink-0">
+                  すべてクリア
+                </button>
+              </div>
+            </div>
+            <ul id="merger-file-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-6 max-h-[700px] overflow-y-auto bg-slate-50/50 border-b border-slate-100">
+              <!-- JSで動的にリストが生成されます -->
+            </ul>
+            <div class="p-3 bg-slate-50 text-center shrink-0">
+              <p class="text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1.5">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                処理はすべてお使いのブラウザ内で行われます。外部サーバーにファイルが送信されることはありません。
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------ 3. PDF圧縮ビュー (Compressor) ------------------ -->
+    <div id="view-compressor" class="absolute inset-0 bg-slate-50 overflow-y-auto hidden">
+      <div class="p-4 sm:px-8 sm:py-4">
+        <div class="max-w-6xl mx-auto space-y-6 pb-12">
+          
+          <div class="text-center space-y-3">
+            <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">PDFのファイルサイズを軽量化</h2>
+            <p class="text-slate-500 font-medium">解像度と画質を最適化し、安全にPDFを圧縮します。</p>
+          </div>
+
+          <!-- ドロップゾーン -->
+          <div id="compressor-drop-zone" class="relative border-2 border-dashed border-slate-300 bg-white hover:border-violet-400 hover:bg-violet-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full">
+            <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <input type="file" id="compressor-file-input" accept="application/pdf" class="hidden" />
+            <div class="relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300">
+              <div id="compressor-drop-zone-icon" class="p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-violet-100 group-hover:text-violet-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1">
+                <i data-lucide="file-down" class="w-12 h-12 transition-all duration-300"></i>
+              </div>
+              <div class="space-y-1 text-center transition-all duration-300">
+                <p class="text-xl font-bold text-slate-700 group-hover:text-violet-700 transition-colors">圧縮するPDFを選択</p>
+                <p class="text-sm font-medium text-slate-400 transition-all duration-300 block">または、ここにファイルをドラッグ＆ドロップ</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 設定・進捗エリア (2カラム等高レイアウト) -->
+          <div id="compressor-work-area" class="hidden grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch w-full">
+            
+            <!-- 左側：対象ファイルと圧縮設定 -->
+            <div class="flex flex-col space-y-6">
+              
+              <!-- 対象ファイル -->
+              <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm shrink-0">
+                <div class="flex justify-between items-center mb-6">
+                  <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                    <i data-lucide="file" class="w-5 h-5 text-violet-500"></i>対象ファイル
+                  </h3>
+                  <button id="compressor-cancel-btn" class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="ファイルを選び直す">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                  </button>
+                </div>
+                <div class="space-y-3">
+                  <div class="flex items-start gap-3">
+                    <div class="bg-violet-50 p-2.5 rounded-xl text-violet-600">
+                      <i data-lucide="file-text" class="w-6 h-6"></i>
+                    </div>
+                    <div class="overflow-hidden">
+                      <p id="compressor-filename" class="font-bold text-slate-700 truncate text-sm">sample.pdf</p>
+                      <p id="compressor-orig-size" class="text-xs text-slate-400 font-semibold mt-1">2.45 MB</p>
+                    </div>
+                  </div>
+                  <div class="flex justify-between text-xs text-slate-400 font-semibold border-t border-slate-100 pt-3">
+                    <span>総ページ数:</span>
+                    <span id="compressor-total-pages" class="text-slate-600">0 ページ</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 圧縮レベル設定 -->
+              <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col flex-1">
+                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2 mb-6">
+                  <i data-lucide="settings" class="w-5 h-5 text-violet-500"></i>圧縮設定
+                </h3>
+                
+                <!-- 圧縮レベル選択 -->
+                <div class="grid grid-cols-3 gap-3 mb-6">
+                  <button id="compress-level-low" class="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50/30 transition-all text-center">
+                    <span class="text-xs font-bold text-slate-400 mb-1">低圧縮</span>
+                    <span class="text-sm font-black text-slate-700">最高画質</span>
+                    <span class="text-[10px] text-slate-400 mt-1">DPI: 400</span>
+                  </button>
+                  <button id="compress-level-mid" class="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-violet-500 bg-violet-50/50 transition-all text-center">
+                    <span class="text-xs font-bold text-violet-600 mb-1">推奨</span>
+                    <span class="text-sm font-black text-slate-800">高画質バランス</span>
+                    <span class="text-[10px] text-slate-500 mt-1">DPI: 300</span>
+                  </button>
+                  <button id="compress-level-high" class="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50/30 transition-all text-center">
+                    <span class="text-xs font-bold text-slate-400 mb-1">高圧縮</span>
+                    <span class="text-sm font-black text-slate-700">標準画質</span>
+                    <span class="text-[10px] text-slate-400 mt-1">DPI: 150</span>
+                  </button>
+                </div>
+
+                <!-- カスタムトグル -->
+                <div class="flex-1">
+                  <button id="compress-custom-toggle" class="text-xs font-bold text-slate-500 hover:text-violet-600 flex items-center gap-1 transition-colors">
+                    <i data-lucide="chevron-right" class="w-4 h-4 transition-transform duration-200" id="custom-toggle-icon"></i>
+                    高度なカスタム設定 (プロ向け)
+                  </button>
+                  
+                  <div id="compress-custom-panel" class="hidden pt-4 space-y-4 border-t border-slate-100 mt-3">
+                    <div>
+                      <div class="flex justify-between items-center mb-1.5">
+                        <label class="text-xs font-bold text-slate-500">解像度スケール (DPI/サイズ)</label>
+                        <span id="custom-scale-val" class="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">3.0x</span>
+                      </div>
+                      <input type="range" id="custom-scale-input" min="0.5" max="5.0" step="0.1" value="3.0" class="w-full accent-violet-600" />
+                    </div>
+                    <div>
+                      <div class="flex justify-between items-center mb-1.5">
+                        <label class="text-xs font-bold text-slate-500">画像圧縮の品質 (品質)</label>
+                        <span id="custom-quality-val" class="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">80%</span>
+                      </div>
+                      <input type="range" id="custom-quality-input" min="10" max="100" step="5" value="80" class="w-full accent-violet-600" />
+                    </div>
+                  </div>
+                </div>
+
+                <button id="compress-start-btn" class="w-full mt-6 py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(124,58,237,0.3)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 hover:scale-105 active:scale-95 shrink-0">
+                  <i data-lucide="zap" class="w-6 h-6"></i>
+                  圧縮を実行する
+                </button>
+              </div>
+
+            </div>
+            
+            <!-- 右側：進捗・結果 -->
+            <div class="flex flex-col h-full">
+
+              <!-- 待機パネル -->
+              <div id="compressor-standby-panel" class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center flex-1 text-center h-full">
+                <div class="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
+                  <i data-lucide="zap" class="w-8 h-8"></i>
+                </div>
+                <h3 class="font-bold text-slate-700 text-lg mb-2">準備完了</h3>
+                <p class="text-sm text-slate-400 max-w-xs">左側のパネルで圧縮レベルを選択し、<br/>「圧縮を実行する」ボタンをクリックしてください。</p>
+              </div>
+              
+              <!-- 進捗状況 -->
+              <div id="compressor-progress-panel" class="hidden bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex-col justify-center flex-1 h-full space-y-6">
+                <div class="text-center space-y-2 mb-4">
+                  <i data-lucide="loader-2" class="w-10 h-10 text-violet-500 animate-spin mx-auto"></i>
+                  <p id="compressor-progress-status" class="text-sm font-bold text-slate-600">処理中...</p>
+                </div>
+                <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                  <div id="compressor-progress-bar" class="bg-violet-500 h-full w-0 transition-all duration-300"></div>
+                </div>
+                <div class="text-center">
+                  <span id="compressor-progress-percent" class="text-3xl font-black text-violet-600">0%</span>
+                </div>
+              </div>
+
+              <!-- 圧縮結果のサマリー -->
+              <div id="compressor-result-panel" class="hidden bg-emerald-50 border border-emerald-100 p-8 rounded-3xl shadow-sm flex-col justify-center flex-1 h-full animate-in fade-in zoom-in-95 duration-300">
+                <h3 class="font-bold text-emerald-800 text-2xl flex items-center justify-center gap-2 mb-2">
+                  <i data-lucide="check-circle" class="w-8 h-8 text-emerald-500"></i>圧縮完了！
+                </h3>
+                <div class="grid grid-cols-2 gap-4 border-y border-emerald-100 py-6 my-6">
+                  <div class="space-y-2 text-center border-r border-emerald-100">
+                    <span class="text-xs font-bold text-emerald-600 block">圧縮前サイズ</span>
+                    <span id="result-before-size" class="font-bold text-slate-500 text-lg">--</span>
+                  </div>
+                  <div class="space-y-2 text-center">
+                    <span class="text-xs font-bold text-emerald-600 block">圧縮後サイズ</span>
+                    <span id="result-after-size" class="font-extrabold text-emerald-700 text-2xl">--</span>
+                  </div>
+                </div>
+                <div class="flex flex-col items-center justify-center pb-6">
+                  <span class="text-sm font-bold text-emerald-700 mb-1">ファイルサイズ削減率</span>
+                  <span id="result-percent" class="text-4xl font-black text-emerald-600">--%</span>
+                </div>
+                <div class="space-y-3 mt-auto pt-2">
+                  <a id="compressor-download-btn" href="#" download class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center justify-center gap-2 font-bold text-lg transition-all shadow-[0_4px_12px_rgba(16,185,129,0.2)]">
+                    <i data-lucide="download" class="w-6 h-6"></i> 圧縮されたPDFを保存
+                  </a>
+                  <button id="compressor-reset-btn" class="w-full py-3 bg-white hover:bg-slate-50 text-slate-600 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border border-slate-200">
+                    <i data-lucide="rotate-ccw" class="w-5 h-5"></i> 別のファイルを圧縮する
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+    
+    <!-- ------------------ 4. 画像変換ビュー (Converter) ------------------ -->
+    <div id="view-converter" class="absolute inset-0 bg-slate-50 overflow-y-auto hidden">
+      <div class="p-4 sm:px-8 sm:py-4">
+        <div class="max-w-6xl mx-auto space-y-6 pb-12">
+          
+          <div class="text-center space-y-3">
+            <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">HEIC画像をJPGに変換</h2>
+            <p class="text-slate-500 font-medium">iPhone等で撮影されたHEIC画像を、一般的なJPG画像に一括変換します。</p>
+          </div>
+
+          <div id="converter-drop-zone" class="relative border-2 border-dashed border-slate-300 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full">
+            <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <!-- HEICファイルのみ許可 -->
+            <input type="file" id="converter-file-input" multiple accept=".heic, image/heic" class="hidden" />
+            <div id="converter-drop-zone-content" class="relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300">
+              <div id="converter-drop-zone-icon" class="p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1">
+                <i id="converter-drop-zone-icon-svg" data-lucide="image-plus" class="w-12 h-12 transition-all duration-300"></i>
+              </div>
+              <div id="converter-drop-zone-text-container" class="space-y-1 text-center transition-all duration-300">
+                <p id="converter-drop-zone-text-title" class="text-xl font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">変換するHEIC画像を選択</p>
+                <p id="converter-drop-zone-text-sub" class="text-sm font-medium text-slate-400 transition-all duration-300 block">または、ここにファイルをドラッグ＆ドロップ</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="converter-file-list-container" class="hidden bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-200/60 overflow-hidden">
+            <div class="p-5 border-b border-slate-100 bg-white flex justify-between items-center">
+              <h2 class="font-bold text-slate-700 flex items-center gap-2">
+                変換する画像 
+                <span id="converter-file-count" class="bg-emerald-50 text-emerald-600 text-xs px-2.5 py-1 rounded-full font-bold">0</span>
+              </h2>
+              <button id="converter-clear-all-btn" class="text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg font-bold transition-colors">
+                すべてクリア
+              </button>
+            </div>
+            <ul id="converter-file-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-6 max-h-[800px] overflow-y-auto bg-slate-50/50">
+              <!-- JSで動的にリストが生成されます -->
+            </ul>
+          </div>
+
+          <div id="converter-action-btn-container" class="hidden pt-2 pb-8 max-w-2xl mx-auto">
+            <button id="converter-action-btn" class="w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-md bg-slate-300 cursor-not-allowed" disabled>
+              <span id="converter-action-btn-content" class="flex items-center gap-2"></span>
+            </button>
+            <p class="text-center text-xs font-medium text-slate-400 mt-5 flex items-center justify-center gap-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4"></i>
+              処理はすべてお使いのブラウザ内で行われます。画像がサーバーに送信されることはありません。
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+    
+    // ==========================================
+    // 共通・タブ制御
+    // ==========================================
+    let currentTab = 'home'; 
+    const tabHomeBtn = document.getElementById('tab-home');
+    const tabEditorBtn = document.getElementById('tab-editor');
+    const tabMergerBtn = document.getElementById('tab-merger');
+    const tabCompressorBtn = document.getElementById('tab-compressor');
+    const tabConverterBtn = document.getElementById('tab-converter');
+    
+    const viewHome = document.getElementById('view-home');
+    const viewEditor = document.getElementById('view-editor');
+    const viewMerger = document.getElementById('view-merger');
+    const viewCompressor = document.getElementById('view-compressor');
+    const viewConverter = document.getElementById('view-converter');
+    
+    const editorActions = document.getElementById('editor-actions');
+
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      const activeClass = "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 bg-white text-indigo-700 shadow-sm ring-1 ring-slate-900/5 whitespace-nowrap";
+      const inactiveClass = "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap";
+
+      tabHomeBtn.className = tab === 'home' ? activeClass : inactiveClass;
+      tabEditorBtn.className = tab === 'editor' ? activeClass : inactiveClass;
+      tabMergerBtn.className = tab === 'merger' ? activeClass : inactiveClass;
+      tabCompressorBtn.className = tab === 'compressor' ? activeClass : inactiveClass;
+      tabConverterBtn.className = tab === 'converter' ? activeClass : inactiveClass;
+      
+      [viewHome, viewEditor, viewMerger, viewCompressor, viewConverter].forEach(v => {
+          v.classList.add('hidden');
+          v.classList.remove('flex');
+      });
+
+      if (tab === 'home') {
+        viewHome.classList.remove('hidden');
+        viewHome.classList.add('flex');
+      } else if (tab === 'editor') {
+        viewEditor.classList.remove('hidden');
+        viewEditor.classList.add('flex');
+        editorActions.classList.remove('hidden'); 
+        editorActions.classList.add('flex');
+      }
+      
+      if (tab !== 'editor') {
+        editorActions.classList.remove('flex'); 
+        editorActions.classList.add('hidden');
+      }
+
+      if (tab === 'merger') {
+        viewMerger.classList.remove('hidden');
+      } else if (tab === 'compressor') {
+        viewCompressor.classList.remove('hidden');
+      } else if (tab === 'converter') {
+        viewConverter.classList.remove('hidden');
+      }
+    }
+
+    tabHomeBtn.addEventListener('click', () => switchTab('home'));
+    tabEditorBtn.addEventListener('click', () => switchTab('editor'));
+    tabMergerBtn.addEventListener('click', () => switchTab('merger'));
+    tabCompressorBtn.addEventListener('click', () => switchTab('compressor'));
+    tabConverterBtn.addEventListener('click', () => switchTab('converter'));
+
+    switchTab('home');
+
+    // ==========================================
+    // 1. PDF編集ツール (Editor) のロジック
+    // ==========================================
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const state = {
+      pdfDoc: null,
+      numPages: 0,
+      currentPage: 1,
+      scale: 1.2,
+      annotations: [], 
+      selectedId: null,
+      editingId: null,
+      isExporting: false,
+      draggingId: null,
+      dragOffset: { x: 0, y: 0 },
+      lastClickId: null,
+      lastClickTime: 0,
+      resizingId: null,
+      resizeDir: null,
+      resizeStart: { x: 0, y: 0, w: 0, h: 0, posX: 0, posY: 0 }
+    };
+
+    const els = {
+      uploadInput: document.getElementById('upload-input'),
+      exportBtn: document.getElementById('export-btn'),
+      exportIcon: document.getElementById('export-icon'),
+      exportSpinner: document.getElementById('export-spinner'),
+      
+      addTextBtn: document.getElementById('add-text-btn'),
+      addImageLabel: document.getElementById('add-image-label'),
+      addImageInput: document.getElementById('add-image-input'),
+      addShapeBtn: document.getElementById('add-shape-btn'),
+      
+      propPanel: document.getElementById('prop-panel'),
+      propEmpty: document.getElementById('prop-empty'),
+      propDeleteBtn: document.getElementById('prop-delete-btn'),
+      
+      propGroupText: document.getElementById('prop-group-text'),
+      propText: document.getElementById('prop-text'),
+      propFontSize: document.getElementById('prop-font-size'),
+      propColor: document.getElementById('prop-color'),
+      propFontFamily: document.getElementById('prop-font-family'),
+      propBgColor: document.getElementById('prop-bg-color'),
+
+      propGroupSize: document.getElementById('prop-group-size'),
+      propWidth: document.getElementById('prop-width'),
+      propHeight: document.getElementById('prop-height'),
+
+      propGroupShape: document.getElementById('prop-group-shape'),
+      propFillColor: document.getElementById('prop-fill-color'),
+      propFillTransparent: document.getElementById('prop-fill-transparent'),
+      propStrokeColor: document.getElementById('prop-stroke-color'),
+      propStrokeTransparent: document.getElementById('prop-stroke-transparent'),
+      propStrokeWidth: document.getElementById('prop-stroke-width'),
+      propStrokeWidthVal: document.getElementById('prop-stroke-width-val'),
+      
+      propFillColorWrapper: document.getElementById('prop-fill-color-wrapper'),
+      propStrokeColorWrapper: document.getElementById('prop-stroke-color-wrapper'),
+
+      mainArea: document.getElementById('main-area'),
+      noPdfMsg: document.getElementById('no-pdf-msg'),
+      pdfViewer: document.getElementById('pdf-viewer'),
+      prevBtn: document.getElementById('prev-btn'),
+      nextBtn: document.getElementById('next-btn'),
+      pageInfo: document.getElementById('page-info'),
+      zoomOutBtn: document.getElementById('zoom-out-btn'),
+      zoomInBtn: document.getElementById('zoom-in-btn'),
+      zoomInfo: document.getElementById('zoom-info'),
+      canvasWrapper: document.getElementById('canvas-wrapper'),
+      canvas: document.getElementById('pdf-canvas'),
+      annotationsContainer: document.getElementById('annotations-container'),
+      dropOverlay: document.getElementById('drop-overlay')
+    };
+
+    async function handleFile(file) {
+      if (!file) return;
+      if (file.type !== 'application/pdf') {
+        alert("PDFファイルを選択してください。");
+        return;
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      try {
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        state.pdfDoc = await loadingTask.promise;
+        state.numPages = state.pdfDoc.numPages;
+        state.currentPage = 1;
+        state.annotations = [];
+        state.selectedId = null;
+        
+        els.noPdfMsg.classList.add('hidden');
+        els.pdfViewer.classList.remove('hidden');
+        els.pdfViewer.classList.add('flex');
+        
+        els.addTextBtn.disabled = false;
+        els.addShapeBtn.disabled = false;
+        els.addImageLabel.classList.remove('opacity-50', 'pointer-events-none');
+        els.addImageInput.disabled = false;
+        
+        updateUI();
+        await renderPage();
+      } catch (error) {
+        console.error("PDF読み込みエラー:", error);
+        alert("PDFの読み込みに失敗しました。");
+      }
+    }
+
+    els.uploadInput.addEventListener('change', (e) => {
+      handleFile(e.target.files[0]);
+      e.target.value = '';
+    });
+
+    let dragCounter = 0; 
+    window.addEventListener('dragenter', (e) => {
+      if (currentTab !== 'editor') return;
+      e.preventDefault();
+      dragCounter++;
+      if (dragCounter === 1) els.dropOverlay.classList.remove('hidden');
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (currentTab !== 'editor') return;
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) els.dropOverlay.classList.add('hidden');
+    });
+    window.addEventListener('dragover', (e) => { if (currentTab === 'editor') e.preventDefault(); });
+    window.addEventListener('drop', (e) => {
+      if (currentTab !== 'editor') return;
+      e.preventDefault();
+      dragCounter = 0;
+      els.dropOverlay.classList.add('hidden');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    async function renderPage() {
+      if (!state.pdfDoc) return;
+      const page = await state.pdfDoc.getPage(state.currentPage);
+      const viewport = page.getViewport({ scale: state.scale });
+      const context = els.canvas.getContext('2d');
+
+      els.canvas.height = viewport.height;
+      els.canvas.width = viewport.width;
+      els.canvasWrapper.style.width = `${viewport.width}px`;
+      els.canvasWrapper.style.height = `${viewport.height}px`;
+
+      await page.render({ canvasContext: context, viewport: viewport }).promise;
+      renderAnnotations();
+    }
+
+    function updateUI() {
+      if (!state.pdfDoc) return;
+      els.pageInfo.textContent = `${state.currentPage} / ${state.numPages}`;
+      els.prevBtn.disabled = state.currentPage === 1;
+      els.nextBtn.disabled = state.currentPage === state.numPages;
+      els.zoomInfo.textContent = `${Math.round(state.scale * 100)}%`;
+
+      if (state.isExporting) {
+        els.exportBtn.disabled = true;
+        els.exportBtn.classList.replace('bg-white', 'bg-slate-100');
+        els.exportBtn.classList.replace('text-slate-700', 'text-slate-400');
+        els.exportIcon.classList.add('hidden');
+        els.exportSpinner.classList.remove('hidden');
+      } else {
+        els.exportBtn.disabled = false;
+        els.exportBtn.classList.replace('bg-slate-100', 'bg-indigo-600');
+        els.exportBtn.classList.replace('text-slate-400', 'text-white');
+        els.exportBtn.classList.add('hover:bg-indigo-700', 'shadow-indigo-200/50', 'shadow-lg');
+        els.exportIcon.classList.remove('hidden');
+        els.exportSpinner.classList.add('hidden');
+      }
+      updatePropertiesPanel();
+      renderAnnotations();
+    }
+
+    function updatePropertiesPanel() {
+      const anno = state.annotations.find(a => a.id === state.selectedId);
+      if (anno) {
+        els.propEmpty.classList.add('hidden');
+        els.propPanel.classList.remove('hidden');
+        
+        els.propGroupText.classList.toggle('hidden', anno.type !== 'text');
+        els.propGroupSize.classList.toggle('hidden', anno.type !== 'image' && anno.type !== 'shape');
+        els.propGroupShape.classList.toggle('hidden', anno.type !== 'shape');
+
+        if (anno.type === 'text') {
+          els.propText.value = anno.text;
+          els.propFontSize.value = anno.fontSize;
+          els.propColor.value = anno.color;
+          els.propFontFamily.value = anno.fontFamily || 'sans-serif';
+          els.propBgColor.value = anno.bgColor;
+        } else if (anno.type === 'image') {
+          els.propWidth.value = Math.round(anno.width);
+          els.propHeight.value = Math.round(anno.height);
+        } else if (anno.type === 'shape') {
+          els.propWidth.value = Math.round(anno.width);
+          els.propHeight.value = Math.round(anno.height);
+          
+          if (anno.fillColor === 'transparent') {
+            els.propFillTransparent.checked = true;
+            els.propFillColor.disabled = true;
+            els.propFillColorWrapper.classList.add('opacity-50', 'pointer-events-none');
+          } else {
+            els.propFillTransparent.checked = false;
+            els.propFillColor.disabled = false;
+            els.propFillColor.value = anno.fillColor;
+            els.propFillColorWrapper.classList.remove('opacity-50', 'pointer-events-none');
+          }
+
+          if (anno.strokeColor === 'transparent') {
+            els.propStrokeTransparent.checked = true;
+            els.propStrokeColor.disabled = true;
+            els.propStrokeColorWrapper.classList.add('opacity-50', 'pointer-events-none');
+          } else {
+            els.propStrokeTransparent.checked = false;
+            els.propStrokeColor.disabled = false;
+            els.propStrokeColor.value = anno.strokeColor;
+            els.propStrokeColorWrapper.classList.remove('opacity-50', 'pointer-events-none');
+          }
+          
+          els.propStrokeWidth.value = anno.strokeWidth;
+          els.propStrokeWidthVal.textContent = `${anno.strokeWidth}px`;
+        }
+      } else {
+        els.propEmpty.classList.remove('hidden');
+        els.propPanel.classList.add('hidden');
+      }
+    }
+
+    function renderAnnotations() {
+      els.annotationsContainer.innerHTML = '';
+      const currentAnnos = state.annotations.filter(a => a.page === state.currentPage);
+      
+      currentAnnos.forEach(anno => {
+        const div = document.createElement('div');
+        div.className = `annotation pointer-events-auto transition-shadow ${state.selectedId === anno.id ? 'selected shadow-md rounded-sm' : ''} ${state.draggingId === anno.id ? 'grabbing opacity-90 scale-105 transition-transform' : ''}`;
+        div.style.left = `${anno.x * state.scale}px`;
+        div.style.top = `${anno.y * state.scale}px`;
+
+        if (anno.type === 'text') {
+          div.style.fontSize = `${anno.fontSize * state.scale}px`;
+          div.style.fontFamily = anno.fontFamily || 'sans-serif';
+          div.style.color = anno.color;
+          div.style.backgroundColor = anno.bgColor;
+          div.classList.add('annotation-content-text');
+
+          if (state.editingId === anno.id) {
+            const textarea = document.createElement('textarea');
+            textarea.className = 'annotation-textarea';
+            textarea.value = anno.text;
+            textarea.style.minHeight = `${anno.fontSize * state.scale * 1.5}px`;
+            textarea.style.overflow = 'hidden';
+            textarea.style.fontFamily = anno.fontFamily || 'sans-serif';
+            textarea.addEventListener('input', (e) => {
+              anno.text = e.target.value;
+              textarea.style.height = 'auto';
+              textarea.style.height = `${textarea.scrollHeight}px`;
+              if (state.selectedId === anno.id) els.propText.value = anno.text;
+            });
+            textarea.addEventListener('blur', () => { state.editingId = null; renderAnnotations(); });
+            div.appendChild(textarea);
+            
+            setTimeout(() => {
+              textarea.focus();
+              textarea.select();
+              textarea.style.height = 'auto';
+              textarea.style.height = `${textarea.scrollHeight}px`;
+            }, 0);
+          } else {
+            div.textContent = anno.text;
+          }
+
+        } else if (anno.type === 'image') {
+          div.style.width = `${anno.width * state.scale}px`;
+          div.style.height = `${anno.height * state.scale}px`;
+          
+          const img = document.createElement('img');
+          img.src = anno.dataUrl;
+          img.draggable = false;
+          img.className = 'annotation-content-image rounded-sm';
+          div.appendChild(img);
+
+        } else if (anno.type === 'shape') {
+          div.style.width = `${anno.width * state.scale}px`;
+          div.style.height = `${anno.height * state.scale}px`;
+          div.style.backgroundColor = anno.fillColor;
+          div.style.border = `${anno.strokeWidth * state.scale}px solid ${anno.strokeColor === 'transparent' ? 'transparent' : anno.strokeColor}`;
+          if (anno.shapeType === 'rect') div.style.borderRadius = '4px';
+        }
+
+        if (state.selectedId === anno.id && (anno.type === 'image' || anno.type === 'shape')) {
+          const dirs = ['br', 'bl', 'tr', 'tl'];
+          dirs.forEach(dir => {
+            const handle = document.createElement('div');
+            handle.className = `resize-handle resize-handle-${dir}`;
+            handle.addEventListener('mousedown', (e) => {
+              e.stopPropagation();
+              state.resizingId = anno.id;
+              state.resizeDir = dir;
+              state.resizeStart = {
+                x: e.clientX,
+                y: e.clientY,
+                w: anno.width,
+                h: anno.height,
+                posX: anno.x,
+                posY: anno.y
+              };
+            });
+            div.appendChild(handle);
+          });
+        }
+
+        div.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+
+          const now = Date.now();
+          if (state.lastClickId === anno.id && now - state.lastClickTime < 300) {
+            if (anno.type === 'text') {
+              state.editingId = anno.id;
+              state.draggingId = null;
+              renderAnnotations();
+            }
+            return;
+          }
+          state.lastClickId = anno.id;
+          state.lastClickTime = now;
+
+          state.selectedId = anno.id;
+          if (state.editingId === anno.id) return;
+          const elementRect = div.getBoundingClientRect();
+          state.dragOffset = { x: e.clientX - elementRect.left, y: e.clientY - elementRect.top };
+          state.draggingId = anno.id;
+          updateUI();
+        });
+
+        els.annotationsContainer.appendChild(div);
+      });
+    }
+
+    els.addTextBtn.addEventListener('click', () => {
+      if (!state.pdfDoc) return;
+      const newAnno = {
+        id: Date.now().toString(), type: 'text', page: state.currentPage,
+        text: "テキストを入力", x: 50 / state.scale, y: 50 / state.scale, 
+        fontSize: 16, color: "#000000", fontFamily: "sans-serif", bgColor: "transparent"
+      };
+      state.annotations.push(newAnno);
+      state.selectedId = newAnno.id;
+      state.editingId = newAnno.id;
+      updateUI();
+    });
+
+    els.addImageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file || !state.pdfDoc) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target.result;
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width; let h = img.height;
+          const maxW = 300;
+          if (w > maxW) { h = h * (maxW / w); w = maxW; }
+          
+          const newAnno = {
+            id: Date.now().toString(), type: 'image', page: state.currentPage,
+            dataUrl: dataUrl, x: 50 / state.scale, y: 50 / state.scale,
+            width: w, height: h
+          };
+          state.annotations.push(newAnno);
+          state.selectedId = newAnno.id;
+          updateUI();
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = ''; 
+    });
+
+    els.addShapeBtn.addEventListener('click', () => {
+      if (!state.pdfDoc) return;
+      const newAnno = {
+        id: Date.now().toString(), type: 'shape', page: state.currentPage,
+        shapeType: 'rect', x: 50 / state.scale, y: 50 / state.scale,
+        width: 100, height: 100, fillColor: 'transparent', strokeColor: '#6366f1', strokeWidth: 4
+      };
+      state.annotations.push(newAnno);
+      state.selectedId = newAnno.id;
+      updateUI();
+    });
+
+    els.prevBtn.addEventListener('click', () => { if (state.currentPage > 1) { state.currentPage--; updateUI(); renderPage(); } });
+    els.nextBtn.addEventListener('click', () => { if (state.currentPage < state.numPages) { state.currentPage++; updateUI(); renderPage(); } });
+    els.zoomOutBtn.addEventListener('click', () => { state.scale = Math.max(0.5, state.scale - 0.2); updateUI(); renderPage(); });
+    els.zoomInBtn.addEventListener('click', () => { state.scale = Math.min(3.0, state.scale + 0.2); updateUI(); renderPage(); });
+
+    const updateAnnoProperty = (key, value) => {
+      if (!state.selectedId) return;
+      const anno = state.annotations.find(a => a.id === state.selectedId);
+      if (anno) { anno[key] = value; renderAnnotations(); }
+    };
+
+    els.propText.addEventListener('input', (e) => updateAnnoProperty('text', e.target.value));
+    els.propFontSize.addEventListener('input', (e) => updateAnnoProperty('fontSize', Number(e.target.value)));
+    els.propColor.addEventListener('input', (e) => updateAnnoProperty('color', e.target.value));
+    els.propFontFamily.addEventListener('change', (e) => updateAnnoProperty('fontFamily', e.target.value));
+    els.propBgColor.addEventListener('change', (e) => updateAnnoProperty('bgColor', e.target.value));
+    
+    els.propWidth.addEventListener('input', (e) => updateAnnoProperty('width', Number(e.target.value)));
+    els.propHeight.addEventListener('input', (e) => updateAnnoProperty('height', Number(e.target.value)));
+
+    els.propFillColor.addEventListener('input', (e) => updateAnnoProperty('fillColor', e.target.value));
+    els.propFillTransparent.addEventListener('change', (e) => {
+      if (e.target.checked) updateAnnoProperty('fillColor', 'transparent');
+      else updateAnnoProperty('fillColor', els.propFillColor.value || '#ffffff');
+      
+      els.propFillColor.disabled = e.target.checked;
+      if(e.target.checked) els.propFillColorWrapper.classList.add('opacity-50', 'pointer-events-none');
+      else els.propFillColorWrapper.classList.remove('opacity-50', 'pointer-events-none');
+    });
+    
+    els.propStrokeColor.addEventListener('input', (e) => updateAnnoProperty('strokeColor', e.target.value));
+    els.propStrokeTransparent.addEventListener('change', (e) => {
+      if (e.target.checked) updateAnnoProperty('strokeColor', 'transparent');
+      else updateAnnoProperty('strokeColor', els.propStrokeColor.value || '#000000');
+      
+      els.propStrokeColor.disabled = e.target.checked;
+      if(e.target.checked) els.propStrokeColorWrapper.classList.add('opacity-50', 'pointer-events-none');
+      else els.propStrokeColorWrapper.classList.remove('opacity-50', 'pointer-events-none');
+    });
+
+    els.propStrokeWidth.addEventListener('input', (e) => {
+      const val = Number(e.target.value);
+      updateAnnoProperty('strokeWidth', val);
+      els.propStrokeWidthVal.textContent = `${val}px`;
+    });
+
+    els.propDeleteBtn.addEventListener('click', () => {
+      state.annotations = state.annotations.filter(a => a.id !== state.selectedId);
+      state.selectedId = null;
+      updateUI();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (currentTab !== 'editor') return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (state.editingId !== null) return;
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedId) {
+        state.annotations = state.annotations.filter(a => a.id !== state.selectedId);
+        state.selectedId = null;
+        updateUI();
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (state.resizingId) {
+        const anno = state.annotations.find(a => a.id === state.resizingId);
+        if (!anno) return;
+
+        const dx = (e.clientX - state.resizeStart.x) / state.scale;
+        const dy = (e.clientY - state.resizeStart.y) / state.scale;
+
+        let newW = state.resizeStart.w;
+        let newH = state.resizeStart.h;
+        let newX = state.resizeStart.posX;
+        let newY = state.resizeStart.posY;
+
+        if (state.resizeDir.includes('r')) newW = Math.max(10, state.resizeStart.w + dx);
+        if (state.resizeDir.includes('l')) {
+          newW = Math.max(10, state.resizeStart.w - dx);
+          if (newW > 10) newX = state.resizeStart.posX + dx;
+        }
+        if (state.resizeDir.includes('b')) newH = Math.max(10, state.resizeStart.h + dy);
+        if (state.resizeDir.includes('t')) {
+          newH = Math.max(10, state.resizeStart.h - dy);
+          if (newH > 10) newY = state.resizeStart.posY + dy;
+        }
+
+        anno.width = newW;
+        anno.height = newH;
+        anno.x = newX;
+        anno.y = newY;
+
+        renderAnnotations();
+        if (state.selectedId === anno.id) updatePropertiesPanel();
+        return;
+      }
+
+      if (!state.draggingId) return;
+      const rect = els.canvasWrapper.getBoundingClientRect();
+      const newX = (e.clientX - rect.left - state.dragOffset.x) / state.scale;
+      const newY = (e.clientY - rect.top - state.dragOffset.y) / state.scale;
+      const anno = state.annotations.find(a => a.id === state.draggingId);
+      if (anno) { anno.x = newX; anno.y = newY; renderAnnotations(); }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (state.resizingId) { 
+        state.resizingId = null; 
+        state.resizeDir = null;
+        renderAnnotations(); 
+      }
+      if (state.draggingId) { 
+        state.draggingId = null; 
+        renderAnnotations(); 
+      }
+    });
+
+    els.mainArea.addEventListener('mousedown', (e) => {
+      if (e.target === els.mainArea || e.target === els.canvasWrapper || e.target === els.canvas || e.target === els.annotationsContainer) {
+        if (state.editingId === null) { state.selectedId = null; updateUI(); }
+      }
+    });
+
+    const loadImageAsync = (src) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+    els.exportBtn.addEventListener('click', async () => {
+      if (!state.pdfDoc || state.isExporting) return;
+      state.isExporting = true;
+      updateUI();
+
+      try {
+        const { jsPDF } = window.jspdf;
+        let doc = null;
+        const exportScale = 2.0;
+
+        for (let i = 1; i <= state.numPages; i++) {
+          const page = await state.pdfDoc.getPage(i);
+          const viewport = page.getViewport({ scale: exportScale });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          await page.render({ canvasContext: context, viewport }).promise;
+
+          const pageAnnos = state.annotations.filter(a => a.page === i);
+          
+          for (const anno of pageAnnos) {
+            const scaledX = anno.x * exportScale;
+            const scaledY = anno.y * exportScale;
+
+            if (anno.type === 'text') {
+              const scaledFontSize = anno.fontSize * exportScale;
+              const fontFamily = anno.fontFamily || 'sans-serif';
+              context.font = `${scaledFontSize}px ${fontFamily}`;
+              context.textBaseline = 'top';
+              const lines = anno.text.split('\n');
+              const lineHeight = scaledFontSize * 1.2;
+
+              if (anno.bgColor !== 'transparent') {
+                context.fillStyle = anno.bgColor;
+                let maxWidth = 0;
+                lines.forEach(line => { const width = context.measureText(line).width; if (width > maxWidth) maxWidth = width; });
+                context.fillRect(scaledX - 2, scaledY - 2, maxWidth + 4, (lines.length * lineHeight) + 4);
+              }
+              context.fillStyle = anno.color;
+              lines.forEach((line, index) => { context.fillText(line, scaledX, scaledY + (index * lineHeight)); });
+            
+            } else if (anno.type === 'image') {
+              try {
+                const img = await loadImageAsync(anno.dataUrl);
+                context.drawImage(img, scaledX, scaledY, anno.width * exportScale, anno.height * exportScale);
+              } catch (err) { console.error("画像描画エラー", err); }
+              
+            } else if (anno.type === 'shape') {
+              const scaledW = anno.width * exportScale;
+              const scaledH = anno.height * exportScale;
+              
+              if (anno.fillColor !== 'transparent') {
+                context.fillStyle = anno.fillColor;
+                context.fillRect(scaledX, scaledY, scaledW, scaledH);
+              }
+              if (anno.strokeWidth > 0 && anno.strokeColor !== 'transparent') {
+                context.strokeStyle = anno.strokeColor;
+                context.lineWidth = anno.strokeWidth * exportScale;
+                const offset = context.lineWidth / 2;
+                context.strokeRect(scaledX + offset, scaledY + offset, scaledW - (offset*2), scaledH - (offset*2));
+              }
+            }
+          }
+
+          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          const pdfWidth = viewport.width / exportScale * 0.75; 
+          const pdfHeight = viewport.height / exportScale * 0.75;
+          const orientation = viewport.width > viewport.height ? 'l' : 'p';
+
+          if (!doc) doc = new jsPDF({ orientation, unit: 'px', format: [pdfWidth, pdfHeight] });
+          else doc.addPage([pdfWidth, pdfHeight], orientation);
+
+          doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        }
+        doc.save('edited_document.pdf');
+      } catch (error) {
+        console.error("エクスポートエラー:", error);
+        alert("PDFの保存に失敗しました。");
+      } finally {
+        state.isExporting = false;
+        updateUI();
+      }
+    });
+
+    // ==========================================
+    // 2. 結合ツール (Merger) のロジック
+    // ==========================================
+    let mergerFiles = [];
+    let isMerging = false;
+    let mergerDraggedItem = null;
+    let mergerIsAnimating = false;
+
+    const mEls = {
+      dropZone: document.getElementById('merger-drop-zone'),
+      dropZoneContent: document.getElementById('merger-drop-zone-content'),
+      dropZoneIcon: document.getElementById('merger-drop-zone-icon'),
+      dropZoneIconSvg: document.getElementById('merger-drop-zone-icon-svg'),
+      dropZoneTextContainer: document.getElementById('merger-drop-zone-text-container'),
+      dropZoneTextTitle: document.getElementById('merger-drop-zone-text-title'),
+      dropZoneTextSub: document.getElementById('merger-drop-zone-text-sub'),
+      fileInput: document.getElementById('merger-file-input'),
+      fileListContainer: document.getElementById('merger-file-list-container'),
+      fileList: document.getElementById('merger-file-list'),
+      fileCount: document.getElementById('merger-file-count'),
+      clearAllBtn: document.getElementById('merger-clear-all-btn'),
+      mergeBtn: document.getElementById('merger-merge-btn'),
+      mergeBtnContent: document.getElementById('merger-merge-btn-content'),
+
+      errorAlert: document.getElementById('merger-error-alert'),
+      errorMessage: document.getElementById('merger-error-message'),
+      successAlert: document.getElementById('merger-success-alert'),
+    };
+
+    function updateMergerUI() {
+      mEls.fileList.innerHTML = '';
+      mergerFiles.forEach((fileItem, index) => {
+        const li = document.createElement('li');
+        li.className = `flex flex-col bg-white border border-slate-200/80 rounded-2xl shadow-sm hover:shadow-xl transition-all p-4 relative group cursor-move hover:border-blue-300 transform hover:-translate-y-1 duration-300 ease-out`;
+        li.draggable = true;
+        li.dataset.index = index;
+        
+        const safeName = fileItem.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        li.innerHTML = `
+          <div class="mb-4 w-full flex-shrink-0 flex items-center justify-between">
+            <div class="flex items-center gap-2 overflow-hidden pr-2">
+              <span class="flex-shrink-0 flex items-center justify-center w-6 h-6 bg-blue-50 text-blue-600 text-xs font-bold rounded-full group-hover:bg-blue-600 group-hover:text-white transition-colors">${index + 1}</span>
+              <p class="text-[14px] font-bold text-slate-700 truncate group-hover:text-blue-700 transition-colors" title="${safeName}">${safeName}</p>
+            </div>
+            <button data-action="remove" data-index="${index}" class="flex-shrink-0 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100" title="削除">
+              <i data-lucide="x" class="w-4 h-4 pointer-events-none"></i>
+            </button>
+          </div>
+          
+          <div class="w-full aspect-[1/1.414] bg-slate-100 border border-slate-200/50 rounded-xl overflow-hidden relative flex-1 transition-colors shadow-inner group/thumb">
+            <img id="thumb-img-${index}" src="${fileItem.thumbUrl}" class="absolute inset-0 w-full h-full object-contain p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)] bg-white transition-opacity duration-200" />
+            
+            <div id="thumb-loading-${index}" class="absolute inset-0 bg-white/50 backdrop-blur-sm hidden items-center justify-center">
+              <i data-lucide="loader-2" class="w-6 h-6 text-blue-500 animate-spin"></i>
+            </div>
+
+            ${fileItem.totalPages > 1 ? `
+            <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-2 opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+              <button data-action="prev-page" data-index="${index}" class="p-1.5 bg-slate-800/60 hover:bg-slate-800 text-white rounded-full backdrop-blur-sm transition-colors disabled:opacity-0 disabled:pointer-events-none" ${fileItem.currentThumbPage === 1 ? 'disabled' : ''} title="前のページ">
+                <i data-lucide="chevron-left" class="w-4 h-4 pointer-events-none"></i>
+              </button>
+              <button data-action="next-page" data-index="${index}" class="p-1.5 bg-slate-800/60 hover:bg-slate-800 text-white rounded-full backdrop-blur-sm transition-colors disabled:opacity-0 disabled:pointer-events-none" ${fileItem.currentThumbPage === fileItem.totalPages ? 'disabled' : ''} title="次のページ">
+                <i data-lucide="chevron-right" class="w-4 h-4 pointer-events-none"></i>
+              </button>
+            </div>
+            ` : ''}
+
+            <div class="absolute bottom-2 right-2 bg-slate-800/80 backdrop-blur-sm text-white text-[10px] px-2.5 py-0.5 rounded-full font-bold shadow-sm">
+              ${fileItem.totalPages > 1 ? `${fileItem.currentThumbPage} / ` : ''}${fileItem.totalPages} Pages
+            </div>
+          </div>
+          
+          <div class="mt-4 px-0.5">
+            <label class="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center justify-between">
+              結合するページ範囲
+            </label>
+            <input type="text" data-index="${index}" class="page-range-input w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-slate-50 focus:bg-white transition-all placeholder-slate-400 font-medium" placeholder="全ページ (1-${fileItem.totalPages})" value="${fileItem.pageRange}" />
+          </div>
+
+          <div class="flex items-center justify-center mt-3 pt-3 border-t border-slate-100 gap-1">
+            <button data-action="up" data-index="${index}" ${index === 0 ? 'disabled' : ''} class="flex-1 py-2 flex justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="前に移動">
+              <i data-lucide="chevron-left" class="w-5 h-5 pointer-events-none"></i>
+            </button>
+            <div class="w-px h-4 bg-slate-200"></div>
+            <button data-action="down" data-index="${index}" ${index === mergerFiles.length - 1 ? 'disabled' : ''} class="flex-1 py-2 flex justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="後に移動">
+              <i data-lucide="chevron-right" class="w-5 h-5 pointer-events-none"></i>
+            </button>
+          </div>
+        `;
+
+        li.addEventListener('dragstart', handleMergerDragStart);
+        li.addEventListener('dragover', handleMergerDragOver);
+        li.addEventListener('dragend', handleMergerDragEnd);
+        
+        li.querySelector('.page-range-input').addEventListener('change', (e) => {
+          mergerFiles[index].pageRange = e.target.value;
+        });
+
+        mEls.fileList.appendChild(li);
+      });
+
+      lucide.createIcons();
+
+      mEls.fileCount.textContent = mergerFiles.length;
+      if (mergerFiles.length > 0) {
+        mEls.fileListContainer.classList.remove('hidden');
+        mEls.fileListContainer.classList.add('!mt-3'); // 隙間を詰める
+
+        // ドロップゾーンをリストと同じ幅に広げて表示
+        mEls.dropZone.className = "relative border-2 border-dashed border-blue-300 bg-blue-50/50 hover:border-blue-400 hover:bg-blue-100/50 rounded-xl p-3 cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden w-full";
+        mEls.dropZoneContent.className = "relative z-10 flex flex-row items-center justify-center space-x-3 pointer-events-none transition-all duration-300";
+        mEls.dropZoneIcon.className = "p-2 rounded-lg bg-white text-blue-500 group-hover:text-blue-600 transition-all duration-300 shadow-sm shrink-0";
+        mEls.dropZoneIconSvg.className = "w-5 h-5 transition-all duration-300";
+        mEls.dropZoneTextContainer.className = "text-left transition-all duration-300";
+        mEls.dropZoneTextTitle.className = "text-sm font-bold text-slate-700 group-hover:text-blue-700 transition-colors";
+        mEls.dropZoneTextSub.className = "text-[11px] font-medium text-slate-400 transition-all duration-300 block mt-0.5";
+        mEls.dropZoneTextSub.textContent = "さらにPDFを追加";
+
+      } else {
+        mEls.fileListContainer.classList.add('hidden');
+        mEls.fileListContainer.classList.remove('!mt-3'); // 詰めた隙間を元に戻す
+
+        // ドロップゾーンを元のサイズに戻す
+        mEls.dropZone.className = "relative border-2 border-dashed border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full";
+        mEls.dropZoneContent.className = "relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300";
+        mEls.dropZoneIcon.className = "p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1";
+        mEls.dropZoneIconSvg.className = "w-12 h-12 transition-all duration-300";
+        mEls.dropZoneTextContainer.className = "space-y-1 text-center transition-all duration-300";
+        mEls.dropZoneTextTitle.className = "text-xl font-bold text-slate-700 group-hover:text-blue-700 transition-colors";
+        mEls.dropZoneTextSub.className = "text-sm font-medium text-slate-400 transition-all duration-300 block";
+        mEls.dropZoneTextSub.textContent = "または、ここにファイルをドラッグ＆ドロップ";
+      }
+
+      if (isMerging) {
+        mEls.mergeBtn.disabled = true;
+        mEls.mergeBtn.className = "text-sm py-2.5 px-6 w-full max-w-[280px] rounded-xl text-white font-bold flex items-center justify-center gap-2 transition-all shadow-sm bg-blue-400 cursor-wait";
+        mEls.mergeBtnContent.innerHTML = `
+          <svg class="animate-spin -ml-1 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          処理中...
+        `;
+      } else if (mergerFiles.length < 2) {
+        mEls.mergeBtn.disabled = true;
+        mEls.mergeBtn.className = "text-sm py-2.5 px-6 w-full max-w-[280px] rounded-xl text-white font-bold flex items-center justify-center gap-2 transition-all shadow-sm bg-slate-300 cursor-not-allowed";
+        mEls.mergeBtnContent.innerHTML = `結合には2つ以上必要`;
+      } else {
+        mEls.mergeBtn.disabled = false;
+        mEls.mergeBtn.className = "text-sm py-2.5 px-6 w-full max-w-[280px] rounded-xl text-white font-bold flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(37,99,235,0.2)] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:scale-105 active:scale-95";
+        mEls.mergeBtnContent.innerHTML = `
+          <i data-lucide="download" class="w-4 h-4"></i>
+          結合してダウンロード
+        `;
+        lucide.createIcons();
+      }
+    }
+
+    async function processMergerFiles(newFiles) {
+      const pdfFiles = Array.from(newFiles).filter(file => file.type === 'application/pdf');
+      if (pdfFiles.length === 0) return;
+
+      mEls.mergeBtn.disabled = true;
+      mEls.mergeBtnContent.innerHTML = '<svg class="animate-spin h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-slate-500 text-sm">読込中...</span>';
+
+      const newFileItems = [];
+      for (const file of pdfFiles) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const totalPages = pdf.numPages;
+          
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 1.0 });
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const thumbUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+          newFileItems.push({
+            id: Math.random().toString(36).substring(7),
+            file: file,
+            name: file.name,
+            size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+            totalPages: totalPages,
+            currentThumbPage: 1,
+            thumbUrl: thumbUrl,
+            pageRange: ''
+          });
+        } catch(e) {
+          console.error(e);
+        }
+      }
+
+      mergerFiles = [...mergerFiles, ...newFileItems];
+      updateMergerUI();
+    }
+
+    function handleMergerDragStart(e) {
+      if (e.target.closest('.page-range-input')) {
+        e.preventDefault();
+        return;
+      }
+      mergerDraggedItem = this;
+      e.dataTransfer.effectAllowed = 'move';
+      if (e.dataTransfer.setData) e.dataTransfer.setData('text/plain', '');
+      setTimeout(() => this.classList.add('opacity-40', 'scale-95'), 0);
+    }
+
+    function handleMergerDragOver(e) {
+      e.preventDefault(); 
+      e.dataTransfer.dropEffect = 'move';
+      
+      if (mergerIsAnimating) return false;
+      
+      const targetItem = e.target.closest('li');
+      if (targetItem && targetItem !== mergerDraggedItem) {
+        const list = Array.from(mEls.fileList.children);
+        const draggedIdx = list.indexOf(mergerDraggedItem);
+        const targetIdx = list.indexOf(targetItem);
+
+        mergerIsAnimating = true;
+        const rects = new Map();
+        list.forEach(item => {
+            rects.set(item, item.getBoundingClientRect());
+            item.style.transition = 'none';
+        });
+
+        if (draggedIdx < targetIdx) targetItem.parentNode.insertBefore(mergerDraggedItem, targetItem.nextSibling);
+        else targetItem.parentNode.insertBefore(mergerDraggedItem, targetItem);
+
+        list.forEach(item => {
+            const oldRect = rects.get(item);
+            const newRect = item.getBoundingClientRect();
+            const deltaX = oldRect.left - newRect.left;
+            const deltaY = oldRect.top - newRect.top;
+            if (deltaX !== 0 || deltaY !== 0) item.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        });
+
+        mEls.fileList.offsetHeight;
+
+        list.forEach(item => {
+            item.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+            item.style.transform = '';
+        });
+        setTimeout(() => { mergerIsAnimating = false; }, 150);
+      }
+      return false;
+    }
+
+    function handleMergerDragEnd(e) {
+      this.classList.remove('opacity-40', 'scale-95');
+      const listItems = Array.from(mEls.fileList.children);
+      listItems.forEach(item => { item.style.transition = ''; item.style.transform = ''; });
+      
+      if (mergerDraggedItem) {
+        const newFiles = listItems.map(li => {
+          const oldIndex = parseInt(li.dataset.index, 10);
+          return mergerFiles[oldIndex];
+        });
+        mergerFiles = newFiles;
+        mergerDraggedItem = null;
+        updateMergerUI();
+      }
+    }
+
+    mEls.dropZone.addEventListener('click', () => mEls.fileInput.click());
+    mEls.fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) processMergerFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    mEls.dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      mEls.dropZone.classList.add('border-blue-400', 'bg-blue-50/50');
+      mEls.dropZone.classList.remove('border-slate-300', 'bg-white');
+      mEls.dropZoneIcon.classList.add('bg-blue-100', 'text-blue-600', 'scale-110', '-translate-y-1');
+      mEls.dropZoneIcon.classList.remove('bg-slate-100', 'text-slate-400');
+    });
+
+    mEls.dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      mEls.dropZone.classList.remove('border-blue-400', 'bg-blue-50/50');
+      mEls.dropZone.classList.add('border-slate-300', 'bg-white');
+      mEls.dropZoneIcon.classList.remove('bg-blue-100', 'text-blue-600', 'scale-110', '-translate-y-1');
+      mEls.dropZoneIcon.classList.add('bg-slate-100', 'text-slate-400');
+    });
+
+    mEls.dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      mEls.dropZone.classList.remove('border-blue-400', 'bg-blue-50/50');
+      mEls.dropZone.classList.add('border-slate-300', 'bg-white');
+      mEls.dropZoneIcon.classList.remove('bg-blue-100', 'text-blue-600', 'scale-110', '-translate-y-1');
+      mEls.dropZoneIcon.classList.add('bg-slate-100', 'text-slate-400');
+      
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        processMergerFiles(e.dataTransfer.files);
+      }
+    });
+
+    async function updateMergerThumb(index) {
+      const fileItem = mergerFiles[index];
+      const loadingEl = document.getElementById(`thumb-loading-${index}`);
+      
+      if(loadingEl) {
+        loadingEl.classList.remove('hidden');
+        loadingEl.classList.add('flex');
+      }
+
+      try {
+        const arrayBuffer = await fileItem.file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(fileItem.currentThumbPage);
+        const viewport = page.getViewport({ scale: 1.0 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        
+        fileItem.thumbUrl = canvas.toDataURL('image/jpeg', 0.8);
+        updateMergerUI();
+      } catch(e) {
+        console.error("サムネイル更新エラー:", e);
+        if(loadingEl) {
+          loadingEl.classList.remove('flex');
+          loadingEl.classList.add('hidden');
+        }
+      }
+    }
+
+    mEls.fileList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const index = parseInt(btn.dataset.index, 10);
+
+      if (action === 'remove') {
+        mergerFiles.splice(index, 1);
+        updateMergerUI();
+      } else if (action === 'up' && index > 0) {
+        const temp = mergerFiles[index];
+        mergerFiles[index] = mergerFiles[index - 1];
+        mergerFiles[index - 1] = temp;
+        updateMergerUI();
+      } else if (action === 'down' && index < mergerFiles.length - 1) {
+        const temp = mergerFiles[index];
+        mergerFiles[index] = mergerFiles[index + 1];
+        mergerFiles[index + 1] = temp;
+        updateMergerUI();
+      } else if (action === 'prev-page') {
+        e.preventDefault();
+        if (mergerFiles[index].currentThumbPage > 1) {
+          mergerFiles[index].currentThumbPage--;
+          await updateMergerThumb(index);
+        }
+      } else if (action === 'next-page') {
+        e.preventDefault();
+        if (mergerFiles[index].currentThumbPage < mergerFiles[index].totalPages) {
+          mergerFiles[index].currentThumbPage++;
+          await updateMergerThumb(index);
+        }
+      }
+    });
+
+    mEls.clearAllBtn.addEventListener('click', () => {
+      mergerFiles = [];
+      updateMergerUI();
+    });
+
+    function showMergerError(msg) {
+      if (msg) {
+        mEls.errorMessage.textContent = msg;
+        mEls.errorAlert.classList.remove('hidden');
+      } else {
+        mEls.errorAlert.classList.add('hidden');
+      }
+    }
+
+    function showMergerSuccess() {
+      mEls.successAlert.classList.remove('hidden');
+      setTimeout(() => mEls.successAlert.classList.add('hidden'), 5000);
+    }
+
+    function parsePageRange(rangeStr, maxPages) {
+      if (!rangeStr || !rangeStr.trim()) return Array.from({length: maxPages}, (_, i) => i);
+      const pages = new Set();
+      const parts = rangeStr.split(',');
+      for (let part of parts) {
+        part = part.trim();
+        if (part.includes('-')) {
+          const [startStr, endStr] = part.split('-');
+          const start = Number(startStr);
+          const end = Number(endStr);
+          if (!isNaN(start) && !isNaN(end) && start <= end) {
+            for (let i = start; i <= end; i++) {
+              if (i >= 1 && i <= maxPages) pages.add(i - 1);
+            }
+          }
+        } else {
+          const num = Number(part);
+          if (!isNaN(num) && num >= 1 && num <= maxPages) {
+            pages.add(num - 1);
+          }
+        }
+      }
+      return Array.from(pages).sort((a, b) => a - b);
+    }
+
+    mEls.mergeBtn.addEventListener('click', async () => {
+      if (mergerFiles.length < 2 || !window.PDFLib) {
+        if (!window.PDFLib) showMergerError("PDFライブラリが読み込まれていません。");
+        return;
+      }
+      
+      let totalPagesCopied = 0;
+      for (const fileItem of mergerFiles) {
+        const indicesToCopy = parsePageRange(fileItem.pageRange, fileItem.totalPages);
+        totalPagesCopied += indicesToCopy.length;
+      }
+      if (totalPagesCopied === 0) {
+         showMergerError('抽出されるページがありません。ページ範囲の指定を再確認してください。');
+         return;
+      }
+
+      isMerging = true;
+      updateMergerUI();
+      showMergerError(null);
+      mEls.successAlert.classList.add('hidden');
+
+      try {
+        const { PDFDocument } = window.PDFLib;
+        const mergedPdf = await PDFDocument.create();
+
+        for (const fileItem of mergerFiles) {
+          const arrayBuffer = await fileItem.file.arrayBuffer();
+          const pdf = await PDFDocument.load(arrayBuffer);
+          const indicesToCopy = parsePageRange(fileItem.pageRange, fileItem.totalPages);
+          
+          if (indicesToCopy.length > 0) {
+            const copiedPages = await mergedPdf.copyPages(pdf, indicesToCopy);
+            copiedPages.forEach((page) => mergedPdf.addPage(page));
+          }
+        }
+
+        const mergedPdfBytes = await mergedPdf.save();
+        const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        const firstFileName = mergerFiles[0].name;
+        const baseName = firstFileName.replace(/\.[^/.]+$/, "");
+        link.download = `${baseName}_merged.pdf`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+        showMergerSuccess();
+      } catch (err) {
+        console.error("Merge error:", err);
+        showMergerError('PDFの結合中にエラーが発生しました。ファイルがパスワード保護されていないか確認してください。');
+      } finally {
+        isMerging = false;
+        updateMergerUI();
+      }
+    });
+
+    // ==========================================
+    // 3. PDF圧縮ツール (Compressor) のロジック
+    // ==========================================
+    let targetCompressFile = null;
+    let compressLevel = 'mid'; // low, mid, high, custom
+    let customCompressScale = 3.0;
+    let customCompressQuality = 80;
+
+    const compEls = {
+      dropZone: document.getElementById('compressor-drop-zone'),
+      fileInput: document.getElementById('compressor-file-input'),
+      workArea: document.getElementById('compressor-work-area'),
+      filename: document.getElementById('compressor-filename'),
+      origSize: document.getElementById('compressor-orig-size'),
+      totalPages: document.getElementById('compressor-total-pages'),
+      
+      btnLow: document.getElementById('compress-level-low'),
+      btnMid: document.getElementById('compress-level-mid'),
+      btnHigh: document.getElementById('compress-level-high'),
+      
+      customToggle: document.getElementById('compress-custom-toggle'),
+      customPanel: document.getElementById('compress-custom-panel'),
+      toggleIcon: document.getElementById('custom-toggle-icon'),
+      
+      scaleInput: document.getElementById('custom-scale-input'),
+      scaleVal: document.getElementById('custom-scale-val'),
+      qualityInput: document.getElementById('custom-quality-input'),
+      qualityVal: document.getElementById('custom-quality-val'),
+      
+      startBtn: document.getElementById('compress-start-btn'),
+      
+      standbyPanel: document.getElementById('compressor-standby-panel'),
+      progressPanel: document.getElementById('compressor-progress-panel'),
+      progressStatus: document.getElementById('compressor-progress-status'),
+      progressPercent: document.getElementById('compressor-progress-percent'),
+      progressBar: document.getElementById('compressor-progress-bar'),
+      
+      resultPanel: document.getElementById('compressor-result-panel'),
+      resBefore: document.getElementById('result-before-size'),
+      resAfter: document.getElementById('result-after-size'),
+      resPercent: document.getElementById('result-percent'),
+      downloadBtn: document.getElementById('compressor-download-btn'),
+      resetBtn: document.getElementById('compressor-reset-btn'),
+      cancelBtn: document.getElementById('compressor-cancel-btn')
+    };
+
+    function selectCompressLevel(level) {
+      compressLevel = level;
+      
+      const inactiveBtnClass = "flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50/30 transition-all text-center";
+      const activeBtnClass = "flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-violet-500 bg-violet-50/50 transition-all text-center";
+      
+      compEls.btnLow.className = level === 'low' ? activeBtnClass : inactiveBtnClass;
+      compEls.btnMid.className = level === 'mid' ? activeBtnClass : inactiveBtnClass;
+      compEls.btnHigh.className = level === 'high' ? activeBtnClass : inactiveBtnClass;
+
+      if (level === 'low') {
+        customCompressScale = 4.0;
+        customCompressQuality = 95;
+      } else if (level === 'mid') {
+        customCompressScale = 3.0;
+        customCompressQuality = 80;
+      } else if (level === 'high') {
+        customCompressScale = 1.5;
+        customCompressQuality = 60;
+      }
+      
+      compEls.scaleInput.value = customCompressScale;
+      compEls.scaleVal.textContent = `${customCompressScale}x`;
+      compEls.qualityInput.value = customCompressQuality;
+      compEls.qualityVal.textContent = `${customCompressQuality}%`;
+    }
+
+    compEls.btnLow.addEventListener('click', () => selectCompressLevel('low'));
+    compEls.btnMid.addEventListener('click', () => selectCompressLevel('mid'));
+    compEls.btnHigh.addEventListener('click', () => selectCompressLevel('high'));
+
+    compEls.customToggle.addEventListener('click', () => {
+      const isHidden = compEls.customPanel.classList.toggle('hidden');
+      compEls.toggleIcon.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(90deg)';
+    });
+
+    compEls.scaleInput.addEventListener('input', (e) => {
+      customCompressScale = parseFloat(e.target.value);
+      compEls.scaleVal.textContent = `${customCompressScale}x`;
+      compressLevel = 'custom';
+      selectCompressLevel('custom');
+    });
+
+    compEls.qualityInput.addEventListener('input', (e) => {
+      customCompressQuality = parseInt(e.target.value, 10);
+      compEls.qualityVal.textContent = `${customCompressQuality}%`;
+      compressLevel = 'custom';
+      selectCompressLevel('custom');
+    });
+
+    async function loadCompressorFile(file) {
+      if (!file || file.type !== 'application/pdf') {
+        alert("有効なPDFファイルを選択してください。");
+        return;
+      }
+      
+      targetCompressFile = file;
+      compEls.filename.textContent = file.name;
+      compEls.origSize.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        compEls.totalPages.textContent = `${pdf.numPages} ページ`;
+        
+        compEls.dropZone.classList.add('hidden');
+        compEls.workArea.classList.remove('hidden');
+
+        compEls.standbyPanel.classList.remove('hidden');
+        compEls.standbyPanel.classList.add('flex');
+        
+        compEls.progressPanel.classList.add('hidden');
+        compEls.progressPanel.classList.remove('flex');
+        
+        compEls.resultPanel.classList.add('hidden');
+        compEls.resultPanel.classList.remove('flex');
+      } catch(e) {
+        console.error("PDF読み込みに失敗しました", e);
+        alert("PDFファイルの読み込みに失敗しました。");
+      }
+    }
+
+    compEls.dropZone.addEventListener('click', () => compEls.fileInput.click());
+    compEls.fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) loadCompressorFile(e.target.files[0]);
+    });
+
+    compEls.dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      compEls.dropZone.classList.add('border-violet-400', 'bg-violet-50/30');
+    });
+    compEls.dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      compEls.dropZone.classList.remove('border-violet-400', 'bg-violet-50/30');
+    });
+    compEls.dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      compEls.dropZone.classList.remove('border-violet-400', 'bg-violet-50/30');
+      if (e.dataTransfer.files.length > 0) {
+        loadCompressorFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    compEls.startBtn.addEventListener('click', async () => {
+      if (!targetCompressFile) return;
+      
+      compEls.startBtn.disabled = true;
+      compEls.standbyPanel.classList.add('hidden');
+      compEls.standbyPanel.classList.remove('flex');
+
+      compEls.progressPanel.classList.remove('hidden');
+      compEls.progressPanel.classList.add('flex');
+
+      compEls.resultPanel.classList.add('hidden');
+      compEls.resultPanel.classList.remove('flex');
+      
+      const { jsPDF } = window.jspdf;
+      
+      try {
+        const arrayBuffer = await targetCompressFile.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const total = pdf.numPages;
+        
+        let doc = null;
+        
+        for (let i = 1; i <= total; i++) {
+          const progress = Math.round(((i - 1) / total) * 100);
+          compEls.progressPercent.textContent = `${progress}%`;
+          compEls.progressStatus.textContent = `ページ ${i} / ${total} を処理中...`;
+          compEls.progressBar.style.width = `${progress}%`;
+          
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: customCompressScale });
+          
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          
+          const imgData = canvas.toDataURL('image/jpeg', customCompressQuality / 100);
+          
+          const pdfWidth = viewport.width / customCompressScale * 0.75; 
+          const pdfHeight = viewport.height / customCompressScale * 0.75;
+          const orientation = viewport.width > viewport.height ? 'l' : 'p';
+          
+          if (!doc) {
+            doc = new jsPDF({ orientation, unit: 'px', format: [pdfWidth, pdfHeight] });
+          } else {
+            doc.addPage([pdfWidth, pdfHeight], orientation);
+          }
+          
+          doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        }
+        
+        compEls.progressPercent.textContent = `100%`;
+        compEls.progressStatus.textContent = `完了`;
+        compEls.progressBar.style.width = `100%`;
+        
+        const compressedOutput = doc.output('blob');
+        const compressedUrl = URL.createObjectURL(compressedOutput);
+        
+        const beforeSizeMB = targetCompressFile.size / 1024 / 1024;
+        const afterSizeMB = compressedOutput.size / 1024 / 1024;
+        const savingPercent = Math.max(0, Math.round(((beforeSizeMB - afterSizeMB) / beforeSizeMB) * 100));
+        
+        compEls.resBefore.textContent = `${beforeSizeMB.toFixed(2)} MB`;
+        compEls.resAfter.textContent = `${afterSizeMB.toFixed(2)} MB`;
+        compEls.resPercent.textContent = `${savingPercent}%`;
+        
+        compEls.downloadBtn.href = compressedUrl;
+        const baseName = targetCompressFile.name.replace(/\.[^/.]+$/, "");
+        compEls.downloadBtn.download = `${baseName}_compressed.pdf`;
+        
+        compEls.progressPanel.classList.add('hidden');
+        compEls.progressPanel.classList.remove('flex');
+
+        compEls.resultPanel.classList.remove('hidden');
+        compEls.resultPanel.classList.add('flex');
+        
+      } catch(e) {
+        console.error("PDFの圧縮に失敗しました", e);
+        alert("PDFの圧縮処理中にエラーが発生しました。");
+      } finally {
+        compEls.startBtn.disabled = false;
+      }
+    });
+
+    const resetCompressorState = () => {
+      targetCompressFile = null;
+      compEls.fileInput.value = ''; 
+      compEls.workArea.classList.add('hidden');
+
+      compEls.standbyPanel.classList.remove('hidden');
+      compEls.standbyPanel.classList.add('flex');
+
+      compEls.progressPanel.classList.add('hidden');
+      compEls.progressPanel.classList.remove('flex');
+
+      compEls.resultPanel.classList.add('hidden');
+      compEls.resultPanel.classList.remove('flex');
+
+      compEls.dropZone.classList.remove('hidden');
+      
+      compEls.progressPercent.textContent = `0%`;
+      compEls.progressStatus.textContent = `処理中...`;
+      compEls.progressBar.style.width = `0%`;
+    };
+
+    compEls.resetBtn.addEventListener('click', resetCompressorState);
+    compEls.cancelBtn.addEventListener('click', resetCompressorState);
+
+    // ==========================================
+    // 4. 画像変換ツール (Converter) のロジック
+    // ==========================================
+    let converterFiles = [];
+    let isConverting = false;
+
+    const cEls = {
+      dropZone: document.getElementById('converter-drop-zone'),
+      dropZoneContent: document.getElementById('converter-drop-zone-content'),
+      dropZoneIcon: document.getElementById('converter-drop-zone-icon'),
+      dropZoneIconSvg: document.getElementById('converter-drop-zone-icon-svg'),
+      dropZoneTextContainer: document.getElementById('converter-drop-zone-text-container'),
+      dropZoneTextTitle: document.getElementById('converter-drop-zone-text-title'),
+      dropZoneTextSub: document.getElementById('converter-drop-zone-text-sub'),
+      fileInput: document.getElementById('converter-file-input'),
+      fileListContainer: document.getElementById('converter-file-list-container'),
+      fileList: document.getElementById('converter-file-list'),
+      fileCount: document.getElementById('converter-file-count'),
+      clearAllBtn: document.getElementById('converter-clear-all-btn'),
+      actionBtnContainer: document.getElementById('converter-action-btn-container'),
+      actionBtn: document.getElementById('converter-action-btn'),
+      actionBtnContent: document.getElementById('converter-action-btn-content'),
+    };
+
+    function updateConverterUI() {
+      cEls.fileList.innerHTML = '';
+      let pendingCount = 0;
+
+      converterFiles.forEach((fileItem, index) => {
+        if(fileItem.status === 'pending' || fileItem.status === 'error') pendingCount++;
+        
+        const li = document.createElement('li');
+        li.className = `flex flex-col bg-white border border-slate-200/80 rounded-2xl shadow-sm hover:shadow-xl transition-all p-4 relative group hover:border-emerald-300 transform hover:-translate-y-1 duration-300 ease-out`;
+        
+        const safeName = fileItem.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        li.innerHTML = `
+          <div class="mb-4 w-full flex-shrink-0 flex items-center justify-between">
+            <div class="flex items-center gap-2 overflow-hidden pr-2">
+              <span class="flex-shrink-0 flex items-center justify-center w-6 h-6 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-full group-hover:bg-emerald-600 group-hover:text-white transition-colors">${index + 1}</span>
+              <p class="text-[14px] font-bold text-slate-700 truncate group-hover:text-emerald-700 transition-colors" title="${safeName}">${safeName}</p>
+            </div>
+            <button data-action="remove" data-index="${index}" class="flex-shrink-0 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100" title="削除">
+              <i data-lucide="x" class="w-4 h-4 pointer-events-none"></i>
+            </button>
+          </div>
+          
+          <div class="w-full aspect-[4/3] bg-slate-100 border border-slate-200/50 rounded-xl overflow-hidden relative flex items-center justify-center group-hover:border-emerald-200 transition-colors shadow-inner">
+            ${fileItem.status === 'converted' 
+              ? `<img src="${fileItem.jpgUrl}" class="w-full h-full object-contain p-1" />` 
+              : `<div class="text-slate-400 flex flex-col items-center gap-2">
+                   ${fileItem.status === 'converting' 
+                      ? '<i data-lucide="loader-2" class="w-8 h-8 animate-spin text-emerald-500"></i><span class="text-xs font-bold text-emerald-600">変換中...</span>' 
+                      : (fileItem.status === 'error' 
+                          ? '<i data-lucide="alert-triangle" class="w-8 h-8 text-red-400"></i><span class="text-xs font-bold text-red-500">エラー</span>'
+                          : '<i data-lucide="image" class="w-8 h-8"></i><span class="text-xs font-bold">待機中</span>')
+                    }
+                 </div>`
+            }
+          </div>
+          
+          <div class="mt-4">
+            ${fileItem.status === 'converted'
+              ? `<a href="${fileItem.jpgUrl}" download="${safeName.replace(/\\.heic$/i, '')}.jpg" class="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-colors"><i data-lucide="download" class="w-4 h-4"></i> JPGを保存</a>`
+              : `<div class="w-full py-2 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center gap-2 text-sm font-bold opacity-50 cursor-not-allowed">未変換</div>`
+            }
+          </div>
+        `;
+
+        li.querySelector('button[data-action="remove"]').addEventListener('click', () => {
+          if (converterFiles[index].jpgUrl) URL.revokeObjectURL(converterFiles[index].jpgUrl);
+          converterFiles.splice(index, 1);
+          updateConverterUI();
+        });
+
+        cEls.fileList.appendChild(li);
+      });
+
+      lucide.createIcons();
+
+      cEls.fileCount.textContent = converterFiles.length;
+      if (converterFiles.length > 0) {
+        cEls.fileListContainer.classList.remove('hidden');
+        cEls.fileListContainer.classList.add('!mt-3'); // 隙間を詰める
+        cEls.actionBtnContainer.classList.remove('hidden');
+
+        // ドロップゾーンをリストと同じ幅に広げて表示
+        cEls.dropZone.className = "relative border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:border-emerald-400 hover:bg-emerald-100/50 rounded-xl p-3 cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden w-full";
+        cEls.dropZoneContent.className = "relative z-10 flex flex-row items-center justify-center space-x-3 pointer-events-none transition-all duration-300";
+        cEls.dropZoneIcon.className = "p-2 rounded-lg bg-white text-emerald-500 group-hover:text-emerald-600 transition-all duration-300 shadow-sm shrink-0";
+        cEls.dropZoneIconSvg.className = "w-5 h-5 transition-all duration-300";
+        cEls.dropZoneTextContainer.className = "text-left transition-all duration-300";
+        cEls.dropZoneTextTitle.className = "text-sm font-bold text-slate-700 group-hover:text-emerald-700 transition-colors";
+        cEls.dropZoneTextSub.className = "text-[11px] font-medium text-slate-400 transition-all duration-300 block mt-0.5";
+        cEls.dropZoneTextSub.textContent = "さらに画像を追加";
+
+      } else {
+        cEls.fileListContainer.classList.add('hidden');
+        cEls.fileListContainer.classList.remove('!mt-3'); // 詰めた隙間を元に戻す
+        cEls.actionBtnContainer.classList.add('hidden');
+
+        // ドロップゾーンを元のサイズに戻す
+        cEls.dropZone.className = "relative border-2 border-dashed border-slate-300 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full";
+        cEls.dropZoneContent.className = "relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300";
+        cEls.dropZoneIcon.className = "p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1";
+        cEls.dropZoneIconSvg.className = "w-12 h-12 transition-all duration-300";
+        cEls.dropZoneTextContainer.className = "space-y-1 text-center transition-all duration-300";
+        cEls.dropZoneTextTitle.className = "text-xl font-bold text-slate-700 group-hover:text-emerald-700 transition-colors";
+        cEls.dropZoneTextSub.className = "text-sm font-medium text-slate-400 transition-all duration-300 block";
+        cEls.dropZoneTextSub.textContent = "または、ここにファイルをドラッグ＆ドロップ";
+      }
+
+      if (isConverting) {
+        cEls.actionBtn.disabled = true;
+        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-md bg-emerald-400 cursor-wait";
+        cEls.actionBtnContent.innerHTML = `
+          <svg class="animate-spin -ml-1 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          変換処理中...
+        `;
+      } else if (pendingCount > 0) {
+        cEls.actionBtn.disabled = false;
+        cEls.actionBtn.dataset.action = 'convert';
+        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(16,185,129,0.3)] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 hover:scale-105 active:scale-95";
+        cEls.actionBtnContent.innerHTML = `
+          <i data-lucide="zap" class="w-6 h-6"></i>
+          未変換の ${pendingCount} 個を JPG に変換
+        `;
+        lucide.createIcons();
+      } else {
+        cEls.actionBtn.disabled = false;
+        cEls.actionBtn.dataset.action = 'downloadAll';
+        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(59,130,246,0.3)] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:scale-105 active:scale-95";
+        cEls.actionBtnContent.innerHTML = `
+          <i data-lucide="download-cloud" class="w-6 h-6"></i>
+          すべてダウンロード
+        `;
+        lucide.createIcons();
+      }
+    }
+
+    function processConverterFiles(newFiles) {
+      const files = Array.from(newFiles).filter(file => 
+        file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic'
+      );
+      
+      if (files.length !== newFiles.length) {
+        alert('HEICファイルのみ追加可能です。一部のファイルはスキップされました。');
+      }
+
+      const newFileItems = files.map(file => ({
+        id: Math.random().toString(36).substring(7),
+        file: file,
+        name: file.name,
+        status: 'pending', 
+        jpgUrl: null
+      }));
+
+      converterFiles = [...converterFiles, ...newFileItems];
+      updateConverterUI();
+    }
+
+    cEls.dropZone.addEventListener('click', () => cEls.fileInput.click());
+    cEls.fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) processConverterFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    cEls.dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      cEls.dropZone.classList.add('border-emerald-400', 'bg-emerald-50/50');
+      cEls.dropZone.classList.remove('border-slate-300', 'bg-white');
+    });
+
+    cEls.dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      cEls.dropZone.classList.remove('border-emerald-400', 'bg-emerald-50/50');
+      cEls.dropZone.classList.add('border-slate-300', 'bg-white');
+    });
+
+    cEls.dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      cEls.dropZone.classList.remove('border-emerald-400', 'bg-emerald-50/50');
+      cEls.dropZone.classList.add('border-slate-300', 'bg-white');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        processConverterFiles(e.dataTransfer.files);
+      }
+    });
+
+    cEls.clearAllBtn.addEventListener('click', () => {
+      converterFiles.forEach(f => { if(f.jpgUrl) URL.revokeObjectURL(f.jpgUrl); });
+      converterFiles = [];
+      updateConverterUI();
+    });
+
+    cEls.actionBtn.addEventListener('click', async () => {
+      const action = cEls.actionBtn.dataset.action;
+      
+      if (action === 'convert') {
+        if (!window.heic2any) {
+          alert("変換ライブラリが読み込まれていません。");
+          return;
+        }
+        
+        isConverting = true;
+        updateConverterUI();
+
+        for (let i = 0; i < converterFiles.length; i++) {
+          if (converterFiles[i].status === 'converted') continue;
+          
+          converterFiles[i].status = 'converting';
+          updateConverterUI();
+
+          try {
+            const convertedBlob = await heic2any({
+              blob: converterFiles[i].file,
+              toType: "image/jpeg",
+              quality: 0.8
+            });
+            const blobToUse = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+            const url = URL.createObjectURL(blobToUse);
+            converterFiles[i].jpgUrl = url;
+            converterFiles[i].status = 'converted';
+          } catch(e) {
+            console.error("Conversion error:", e);
+            converterFiles[i].status = 'error';
+          }
+          updateConverterUI();
+        }
+        
+        isConverting = false;
+        updateConverterUI();
+        
+      } else if (action === 'downloadAll') {
+        converterFiles.forEach(f => {
+          if (f.status === 'converted' && f.jpgUrl) {
+            const link = document.createElement('a');
+            link.href = f.jpgUrl;
+            link.download = f.name.replace(/\.heic$/i, '') + '.jpg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        });
+      }
+    });
+
+  </script>
+</body>
+</html>
