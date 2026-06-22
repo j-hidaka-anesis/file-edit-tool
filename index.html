@@ -562,7 +562,7 @@
                   </div>
                 </div>
 
-                <button id="compress-start-btn" class="w-full mt-6 py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(124,58,237,0.3)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 hover:scale-105 active:scale-95 shrink-0">
+                <button id="compress-start-btn" class="w-full mt-6 py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(124,58,237,0.3)] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 hover:-translate-y-0.5 active:translate-y-0 shrink-0">
                   <i data-lucide="zap" class="w-6 h-6"></i>
                   圧縮を実行する
                 </button>
@@ -616,10 +616,10 @@
                   <span id="result-percent" class="text-4xl font-black text-emerald-600">--%</span>
                 </div>
                 <div class="space-y-3 mt-auto pt-2">
-                  <a id="compressor-download-btn" href="#" download class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center justify-center gap-2 font-bold text-lg transition-all shadow-[0_4px_12px_rgba(16,185,129,0.2)]">
+                  <a id="compressor-download-btn" href="#" download class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center justify-center gap-2 font-bold text-lg transition-all shadow-[0_4px_12px_rgba(16,185,129,0.2)] hover:-translate-y-0.5 active:translate-y-0">
                     <i data-lucide="download" class="w-6 h-6"></i> 圧縮されたPDFを保存
                   </a>
-                  <button id="compressor-reset-btn" class="w-full py-3 bg-white hover:bg-slate-50 text-slate-600 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border border-slate-200">
+                  <button id="compressor-reset-btn" class="w-full py-3 bg-white hover:bg-slate-50 text-slate-600 rounded-xl flex items-center justify-center gap-2 font-bold transition-all border border-slate-200 hover:-translate-y-0.5 active:translate-y-0">
                     <i data-lucide="rotate-ccw" class="w-5 h-5"></i> 別のファイルを圧縮する
                   </button>
                 </div>
@@ -1146,7 +1146,7 @@
       const newAnno = {
         id: Date.now().toString(), type: 'shape', page: state.currentPage,
         shapeType: 'rect', x: 50 / state.scale, y: 50 / state.scale,
-        width: 100, height: 100, fillColor: 'transparent', strokeColor: '#6366f1', strokeWidth: 4
+        width: 100, height: 100, fillColor: '#ffffff', strokeColor: '#ffffff', strokeWidth: 0
       };
       state.annotations.push(newAnno);
       state.selectedId = newAnno.id;
@@ -1516,7 +1516,7 @@
         mEls.mergeBtnContent.innerHTML = `結合には2つ以上必要`;
       } else {
         mEls.mergeBtn.disabled = false;
-        mEls.mergeBtn.className = "text-sm py-2.5 px-6 w-full max-w-[280px] rounded-xl text-white font-bold flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(37,99,235,0.2)] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:scale-105 active:scale-95";
+        mEls.mergeBtn.className = "text-sm py-2.5 px-6 w-full max-w-[280px] rounded-xl text-white font-bold flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(37,99,235,0.2)] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:-translate-y-0.5 active:translate-y-0";
         mEls.mergeBtnContent.innerHTML = `
           <i data-lucide="download" class="w-4 h-4"></i>
           結合してダウンロード
@@ -2222,16 +2222,16 @@
       } else if (pendingCount > 0) {
         cEls.actionBtn.disabled = false;
         cEls.actionBtn.dataset.action = 'convert';
-        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(16,185,129,0.3)] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 hover:scale-105 active:scale-95";
+        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(16,185,129,0.3)] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 hover:-translate-y-0.5 active:translate-y-0";
         cEls.actionBtnContent.innerHTML = `
           <i data-lucide="zap" class="w-6 h-6"></i>
-          未変換の ${pendingCount} 個を JPG に変換
+          HEICをJPGに変換
         `;
         lucide.createIcons();
       } else {
         cEls.actionBtn.disabled = false;
         cEls.actionBtn.dataset.action = 'downloadAll';
-        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(59,130,246,0.3)] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:scale-105 active:scale-95";
+        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(59,130,246,0.3)] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:-translate-y-0.5 active:translate-y-0";
         cEls.actionBtnContent.innerHTML = `
           <i data-lucide="download-cloud" class="w-6 h-6"></i>
           すべてダウンロード
