@@ -18,9 +18,6 @@
   <!-- PDF-Lib (結合用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
   
-  <!-- heic2any (HEIC -> JPG 変換用) -->
-  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
-
   <style>
     /* 編集ツールのスタイル */
     .annotation {
@@ -80,7 +77,7 @@
     .resize-handle-tl { top: -7px; left: -7px; cursor: nwse-resize; }
 
     /* D&Dゾーンのスタイル */
-    #merger-drop-zone, #converter-drop-zone, #compressor-drop-zone { transition: all 0.2s ease-in-out; }
+    #merger-drop-zone, #compressor-drop-zone { transition: all 0.2s ease-in-out; }
     
     /* カスタムスクロールバー非表示 */
     .hide-scrollbar::-webkit-scrollbar {
@@ -124,9 +121,6 @@
       </button>
       <button id="tab-compressor" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
         <div class="flex items-center gap-2"><i data-lucide="file-down" class="w-4 h-4"></i> PDF圧縮</div>
-      </button>
-      <button id="tab-converter" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
-        <div class="flex items-center gap-2"><i data-lucide="image" class="w-4 h-4"></i> HEIC→JPG変換</div>
       </button>
     </div>
     
@@ -187,18 +181,6 @@
               </div>
               <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-violet-700 transition-colors tracking-tight">PDF圧縮</h3>
               <p class="text-slate-500 text-sm leading-relaxed text-center px-2">PDFのファイルサイズを最適化。画質設定を選択するだけで軽量化して保存。</p>
-            </div>
-          </button>
-
-          <!-- HEIC→JPG変換カード -->
-          <button onclick="switchTab('converter')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-emerald-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
-            <div class="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div class="relative z-10 flex flex-col items-center">
-              <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
-                <i data-lucide="image" class="w-10 h-10"></i>
-              </div>
-              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-emerald-700 transition-colors tracking-tight">HEIC→JPG変換</h3>
-              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">iPhone等で撮影されたHEIC画像を、一般的なJPG画像に一括で高速変換。</p>
             </div>
           </button>
         </div>
@@ -632,60 +614,6 @@
         </div>
       </div>
     </div>
-    
-    <!-- ------------------ 4. 画像変換ビュー (Converter) ------------------ -->
-    <div id="view-converter" class="absolute inset-0 bg-slate-50 overflow-y-auto hidden">
-      <div class="p-4 sm:px-8 sm:py-4">
-        <div class="max-w-6xl mx-auto space-y-6 pb-12">
-          
-          <div class="text-center space-y-3">
-            <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">HEIC画像をJPGに変換</h2>
-            <p class="text-slate-500 font-medium">iPhone等で撮影されたHEIC画像を、一般的なJPG画像に一括変換します。</p>
-          </div>
-
-          <div id="converter-drop-zone" class="relative border-2 border-dashed border-slate-300 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full">
-            <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <!-- HEICファイルのみ許可 -->
-            <input type="file" id="converter-file-input" multiple accept=".heic, image/heic" class="hidden" />
-            <div id="converter-drop-zone-content" class="relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300">
-              <div id="converter-drop-zone-icon" class="p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1">
-                <i id="converter-drop-zone-icon-svg" data-lucide="image-plus" class="w-12 h-12 transition-all duration-300"></i>
-              </div>
-              <div id="converter-drop-zone-text-container" class="space-y-1 text-center transition-all duration-300">
-                <p id="converter-drop-zone-text-title" class="text-xl font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">変換するHEIC画像を選択</p>
-                <p id="converter-drop-zone-text-sub" class="text-sm font-medium text-slate-400 transition-all duration-300 block">または、ここにファイルをドラッグ＆ドロップ</p>
-              </div>
-            </div>
-          </div>
-
-          <div id="converter-file-list-container" class="hidden bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-200/60 overflow-hidden">
-            <div class="p-5 border-b border-slate-100 bg-white flex justify-between items-center">
-              <h2 class="font-bold text-slate-700 flex items-center gap-2">
-                変換する画像 
-                <span id="converter-file-count" class="bg-emerald-50 text-emerald-600 text-xs px-2.5 py-1 rounded-full font-bold">0</span>
-              </h2>
-              <button id="converter-clear-all-btn" class="text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg font-bold transition-colors">
-                すべてクリア
-              </button>
-            </div>
-            <ul id="converter-file-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-6 max-h-[800px] overflow-y-auto bg-slate-50/50">
-              <!-- JSで動的にリストが生成されます -->
-            </ul>
-          </div>
-
-          <div id="converter-action-btn-container" class="hidden pt-2 pb-8 max-w-2xl mx-auto">
-            <button id="converter-action-btn" class="w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-md bg-slate-300 cursor-not-allowed" disabled>
-              <span id="converter-action-btn-content" class="flex items-center gap-2"></span>
-            </button>
-            <p class="text-center text-xs font-medium text-slate-400 mt-5 flex items-center justify-center gap-1.5">
-              <i data-lucide="shield-check" class="w-4 h-4"></i>
-              処理はすべてお使いのブラウザ内で行われます。画像がサーバーに送信されることはありません。
-            </p>
-          </div>
-
-        </div>
-      </div>
-    </div>
 
   </div>
 
@@ -700,13 +628,11 @@
     const tabEditorBtn = document.getElementById('tab-editor');
     const tabMergerBtn = document.getElementById('tab-merger');
     const tabCompressorBtn = document.getElementById('tab-compressor');
-    const tabConverterBtn = document.getElementById('tab-converter');
     
     const viewHome = document.getElementById('view-home');
     const viewEditor = document.getElementById('view-editor');
     const viewMerger = document.getElementById('view-merger');
     const viewCompressor = document.getElementById('view-compressor');
-    const viewConverter = document.getElementById('view-converter');
     
     const editorActions = document.getElementById('editor-actions');
 
@@ -720,9 +646,8 @@
       tabEditorBtn.className = tab === 'editor' ? activeClass : inactiveClass;
       tabMergerBtn.className = tab === 'merger' ? activeClass : inactiveClass;
       tabCompressorBtn.className = tab === 'compressor' ? activeClass : inactiveClass;
-      tabConverterBtn.className = tab === 'converter' ? activeClass : inactiveClass;
       
-      [viewHome, viewEditor, viewMerger, viewCompressor, viewConverter].forEach(v => {
+      [viewHome, viewEditor, viewMerger, viewCompressor].forEach(v => {
           v.classList.add('hidden');
           v.classList.remove('flex');
       });
@@ -746,8 +671,6 @@
         viewMerger.classList.remove('hidden');
       } else if (tab === 'compressor') {
         viewCompressor.classList.remove('hidden');
-      } else if (tab === 'converter') {
-        viewConverter.classList.remove('hidden');
       }
     }
 
@@ -755,7 +678,6 @@
     tabEditorBtn.addEventListener('click', () => switchTab('editor'));
     tabMergerBtn.addEventListener('click', () => switchTab('merger'));
     tabCompressorBtn.addEventListener('click', () => switchTab('compressor'));
-    tabConverterBtn.addEventListener('click', () => switchTab('converter'));
 
     switchTab('home');
 
@@ -2097,254 +2019,6 @@
 
     compEls.resetBtn.addEventListener('click', resetCompressorState);
     compEls.cancelBtn.addEventListener('click', resetCompressorState);
-
-    // ==========================================
-    // 4. 画像変換ツール (Converter) のロジック
-    // ==========================================
-    let converterFiles = [];
-    let isConverting = false;
-
-    const cEls = {
-      dropZone: document.getElementById('converter-drop-zone'),
-      dropZoneContent: document.getElementById('converter-drop-zone-content'),
-      dropZoneIcon: document.getElementById('converter-drop-zone-icon'),
-      dropZoneIconSvg: document.getElementById('converter-drop-zone-icon-svg'),
-      dropZoneTextContainer: document.getElementById('converter-drop-zone-text-container'),
-      dropZoneTextTitle: document.getElementById('converter-drop-zone-text-title'),
-      dropZoneTextSub: document.getElementById('converter-drop-zone-text-sub'),
-      fileInput: document.getElementById('converter-file-input'),
-      fileListContainer: document.getElementById('converter-file-list-container'),
-      fileList: document.getElementById('converter-file-list'),
-      fileCount: document.getElementById('converter-file-count'),
-      clearAllBtn: document.getElementById('converter-clear-all-btn'),
-      actionBtnContainer: document.getElementById('converter-action-btn-container'),
-      actionBtn: document.getElementById('converter-action-btn'),
-      actionBtnContent: document.getElementById('converter-action-btn-content'),
-    };
-
-    function updateConverterUI() {
-      cEls.fileList.innerHTML = '';
-      let pendingCount = 0;
-
-      converterFiles.forEach((fileItem, index) => {
-        if(fileItem.status === 'pending' || fileItem.status === 'error') pendingCount++;
-        
-        const li = document.createElement('li');
-        li.className = `flex flex-col bg-white border border-slate-200/80 rounded-2xl shadow-sm hover:shadow-xl transition-all p-4 relative group hover:border-emerald-300 transform hover:-translate-y-1 duration-300 ease-out`;
-        
-        const safeName = fileItem.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        li.innerHTML = `
-          <div class="mb-4 w-full flex-shrink-0 flex items-center justify-between">
-            <div class="flex items-center gap-2 overflow-hidden pr-2">
-              <span class="flex-shrink-0 flex items-center justify-center w-6 h-6 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-full group-hover:bg-emerald-600 group-hover:text-white transition-colors">${index + 1}</span>
-              <p class="text-[14px] font-bold text-slate-700 truncate group-hover:text-emerald-700 transition-colors" title="${safeName}">${safeName}</p>
-            </div>
-            <button data-action="remove" data-index="${index}" class="flex-shrink-0 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100" title="削除">
-              <i data-lucide="x" class="w-4 h-4 pointer-events-none"></i>
-            </button>
-          </div>
-          
-          <div class="w-full aspect-[4/3] bg-slate-100 border border-slate-200/50 rounded-xl overflow-hidden relative flex items-center justify-center group-hover:border-emerald-200 transition-colors shadow-inner">
-            ${fileItem.status === 'converted' 
-              ? `<img src="${fileItem.jpgUrl}" class="w-full h-full object-contain p-1" />` 
-              : `<div class="text-slate-400 flex flex-col items-center gap-2">
-                   ${fileItem.status === 'converting' 
-                      ? '<i data-lucide="loader-2" class="w-8 h-8 animate-spin text-emerald-500"></i><span class="text-xs font-bold text-emerald-600">変換中...</span>' 
-                      : (fileItem.status === 'error' 
-                          ? '<i data-lucide="alert-triangle" class="w-8 h-8 text-red-400"></i><span class="text-xs font-bold text-red-500">エラー</span>'
-                          : '<i data-lucide="image" class="w-8 h-8"></i><span class="text-xs font-bold">待機中</span>')
-                    }
-                 </div>`
-            }
-          </div>
-          
-          <div class="mt-4">
-            ${fileItem.status === 'converted'
-              ? `<a href="${fileItem.jpgUrl}" download="${safeName.replace(/\\.heic$/i, '')}.jpg" class="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-colors"><i data-lucide="download" class="w-4 h-4"></i> JPGを保存</a>`
-              : `<div class="w-full py-2 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center gap-2 text-sm font-bold opacity-50 cursor-not-allowed">未変換</div>`
-            }
-          </div>
-        `;
-
-        li.querySelector('button[data-action="remove"]').addEventListener('click', () => {
-          if (converterFiles[index].jpgUrl) URL.revokeObjectURL(converterFiles[index].jpgUrl);
-          converterFiles.splice(index, 1);
-          updateConverterUI();
-        });
-
-        cEls.fileList.appendChild(li);
-      });
-
-      lucide.createIcons();
-
-      cEls.fileCount.textContent = converterFiles.length;
-      if (converterFiles.length > 0) {
-        cEls.fileListContainer.classList.remove('hidden');
-        cEls.fileListContainer.classList.add('!mt-3'); // 隙間を詰める
-        cEls.actionBtnContainer.classList.remove('hidden');
-
-        // ドロップゾーンをリストと同じ幅に広げて表示
-        cEls.dropZone.className = "relative border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:border-emerald-400 hover:bg-emerald-100/50 rounded-xl p-3 cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden w-full";
-        cEls.dropZoneContent.className = "relative z-10 flex flex-row items-center justify-center space-x-3 pointer-events-none transition-all duration-300";
-        cEls.dropZoneIcon.className = "p-2 rounded-lg bg-white text-emerald-500 group-hover:text-emerald-600 transition-all duration-300 shadow-sm shrink-0";
-        cEls.dropZoneIconSvg.className = "w-5 h-5 transition-all duration-300";
-        cEls.dropZoneTextContainer.className = "text-left transition-all duration-300";
-        cEls.dropZoneTextTitle.className = "text-sm font-bold text-slate-700 group-hover:text-emerald-700 transition-colors";
-        cEls.dropZoneTextSub.className = "text-[11px] font-medium text-slate-400 transition-all duration-300 block mt-0.5";
-        cEls.dropZoneTextSub.textContent = "さらに画像を追加";
-
-      } else {
-        cEls.fileListContainer.classList.add('hidden');
-        cEls.fileListContainer.classList.remove('!mt-3'); // 詰めた隙間を元に戻す
-        cEls.actionBtnContainer.classList.add('hidden');
-
-        // ドロップゾーンを元のサイズに戻す
-        cEls.dropZone.className = "relative border-2 border-dashed border-slate-300 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full";
-        cEls.dropZoneContent.className = "relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300";
-        cEls.dropZoneIcon.className = "p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1";
-        cEls.dropZoneIconSvg.className = "w-12 h-12 transition-all duration-300";
-        cEls.dropZoneTextContainer.className = "space-y-1 text-center transition-all duration-300";
-        cEls.dropZoneTextTitle.className = "text-xl font-bold text-slate-700 group-hover:text-emerald-700 transition-colors";
-        cEls.dropZoneTextSub.className = "text-sm font-medium text-slate-400 transition-all duration-300 block";
-        cEls.dropZoneTextSub.textContent = "または、ここにファイルをドラッグ＆ドロップ";
-      }
-
-      if (isConverting) {
-        cEls.actionBtn.disabled = true;
-        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-md bg-emerald-400 cursor-wait";
-        cEls.actionBtnContent.innerHTML = `
-          <svg class="animate-spin -ml-1 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          変換処理中...
-        `;
-      } else if (pendingCount > 0) {
-        cEls.actionBtn.disabled = false;
-        cEls.actionBtn.dataset.action = 'convert';
-        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(16,185,129,0.3)] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 hover:-translate-y-0.5 active:translate-y-0";
-        cEls.actionBtnContent.innerHTML = `
-          <i data-lucide="zap" class="w-6 h-6"></i>
-          HEICをJPGに変換
-        `;
-        lucide.createIcons();
-      } else {
-        cEls.actionBtn.disabled = false;
-        cEls.actionBtn.dataset.action = 'downloadAll';
-        cEls.actionBtn.className = "w-full py-4 px-6 rounded-2xl text-white font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-[0_8px_20px_rgba(59,130,246,0.3)] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:-translate-y-0.5 active:translate-y-0";
-        cEls.actionBtnContent.innerHTML = `
-          <i data-lucide="download-cloud" class="w-6 h-6"></i>
-          すべてダウンロード
-        `;
-        lucide.createIcons();
-      }
-    }
-
-    function processConverterFiles(newFiles) {
-      const files = Array.from(newFiles).filter(file => 
-        file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic'
-      );
-      
-      if (files.length !== newFiles.length) {
-        alert('HEICファイルのみ追加可能です。一部のファイルはスキップされました。');
-      }
-
-      const newFileItems = files.map(file => ({
-        id: Math.random().toString(36).substring(7),
-        file: file,
-        name: file.name,
-        status: 'pending', 
-        jpgUrl: null
-      }));
-
-      converterFiles = [...converterFiles, ...newFileItems];
-      updateConverterUI();
-    }
-
-    cEls.dropZone.addEventListener('click', () => cEls.fileInput.click());
-    cEls.fileInput.addEventListener('change', (e) => {
-      if (e.target.files && e.target.files.length > 0) processConverterFiles(e.target.files);
-      e.target.value = '';
-    });
-
-    cEls.dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      cEls.dropZone.classList.add('border-emerald-400', 'bg-emerald-50/50');
-      cEls.dropZone.classList.remove('border-slate-300', 'bg-white');
-    });
-
-    cEls.dropZone.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      cEls.dropZone.classList.remove('border-emerald-400', 'bg-emerald-50/50');
-      cEls.dropZone.classList.add('border-slate-300', 'bg-white');
-    });
-
-    cEls.dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      cEls.dropZone.classList.remove('border-emerald-400', 'bg-emerald-50/50');
-      cEls.dropZone.classList.add('border-slate-300', 'bg-white');
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        processConverterFiles(e.dataTransfer.files);
-      }
-    });
-
-    cEls.clearAllBtn.addEventListener('click', () => {
-      converterFiles.forEach(f => { if(f.jpgUrl) URL.revokeObjectURL(f.jpgUrl); });
-      converterFiles = [];
-      updateConverterUI();
-    });
-
-    cEls.actionBtn.addEventListener('click', async () => {
-      const action = cEls.actionBtn.dataset.action;
-      
-      if (action === 'convert') {
-        if (!window.heic2any) {
-          alert("変換ライブラリが読み込まれていません。");
-          return;
-        }
-        
-        isConverting = true;
-        updateConverterUI();
-
-        for (let i = 0; i < converterFiles.length; i++) {
-          if (converterFiles[i].status === 'converted') continue;
-          
-          converterFiles[i].status = 'converting';
-          updateConverterUI();
-
-          try {
-            const convertedBlob = await heic2any({
-              blob: converterFiles[i].file,
-              toType: "image/jpeg",
-              quality: 0.8
-            });
-            const blobToUse = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-            const url = URL.createObjectURL(blobToUse);
-            converterFiles[i].jpgUrl = url;
-            converterFiles[i].status = 'converted';
-          } catch(e) {
-            console.error("Conversion error:", e);
-            converterFiles[i].status = 'error';
-          }
-          updateConverterUI();
-        }
-        
-        isConverting = false;
-        updateConverterUI();
-        
-      } else if (action === 'downloadAll') {
-        converterFiles.forEach(f => {
-          if (f.status === 'converted' && f.jpgUrl) {
-            const link = document.createElement('a');
-            link.href = f.jpgUrl;
-            link.download = f.name.replace(/\.heic$/i, '') + '.jpg';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }
-        });
-      }
-    });
 
   </script>
 </body>
