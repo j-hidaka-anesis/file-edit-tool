@@ -139,7 +139,7 @@
           <span class="hidden sm:inline">PDF保存</span>
         </button>
       </div>
-      <span class="absolute -bottom-2 -right-4 text-[10px] font-bold text-slate-300 pointer-events-none">Ver.1.0</span>
+      <span class="absolute -bottom-2 -right-4 text-[10px] font-bold text-slate-300 pointer-events-none">Ver.1.1</span>
     </div>
   </header>
 
@@ -1643,7 +1643,7 @@
     }
 
     async function processMergerFiles(newFiles) {
-      const pdfFiles = Array.from(newFiles).filter(file => file.type === 'application/pdf').reverse();
+      const pdfFiles = Array.from(newFiles).filter(file => file.type === 'application/pdf');
       if (pdfFiles.length === 0) return;
 
       mEls.mergeBtn.disabled = true;
