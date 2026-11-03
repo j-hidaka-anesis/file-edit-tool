@@ -83,7 +83,15 @@
     .resize-handle-tl { top: -7px; left: -7px; cursor: nwse-resize; }
 
     /* D&Dゾーンのスタイル */
-    #merger-drop-zone, #compressor-drop-zone, #converter-drop-zone { transition: all 0.2s ease-in-out; }
+    #merger-drop-zone, #compressor-drop-zone, #converter-drop-zone, #extractor-drop-zone { transition: all 0.2s ease-in-out; }
+
+    /* 透過画像の透明部分が分かるよう市松模様を敷く */
+    .checkerboard {
+      background-color: #fff;
+      background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
     
     /* カスタムスクロールバー非表示 */
     .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -123,6 +131,9 @@
       <button id="tab-compressor" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
         <div class="flex items-center gap-2"><i data-lucide="file-down" class="w-4 h-4"></i> PDF圧縮</div>
       </button>
+      <button id="tab-extractor" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
+        <div class="flex items-center gap-2"><i data-lucide="images" class="w-4 h-4"></i> PDF画像抽出</div>
+      </button>
       <button id="tab-converter" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 whitespace-nowrap">
         <div class="flex items-center gap-2"><i data-lucide="image" class="w-4 h-4"></i> HEIC→JPG変換</div>
       </button>
@@ -142,7 +153,7 @@
           <span class="hidden sm:inline">PDF保存</span>
         </button>
       </div>
-      <span class="absolute -bottom-2 -right-4 text-[10px] font-bold text-slate-300 pointer-events-none">Ver.2.0</span>
+      <span class="absolute -bottom-2 -right-4 text-[10px] font-bold text-slate-300 pointer-events-none">Ver.3.0</span>
     </div>
   </header>
 
@@ -151,53 +162,60 @@
     
     <!-- ------------------ 0. ホームビュー ------------------ -->
     <div id="view-home" class="absolute inset-0 bg-slate-50 flex-col items-center justify-start p-6 pt-6 md:pt-10 overflow-y-auto z-10 flex">
-      <div class="max-w-6xl w-full py-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div class="max-w-6xl w-full py-4 my-auto">
+        <div class="flex flex-wrap justify-center gap-8">
           <!-- PDFファイル結合カード -->
-          <button onclick="switchTab('merger')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-blue-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+          <button onclick="switchTab('merger')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-blue-300 overflow-hidden w-full md:w-[calc((100%-2rem)/2)] lg:w-[calc((100%-4rem)/3)] min-h-[300px] justify-center hover:-translate-y-1">
             <div class="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div class="relative z-10 flex flex-col items-center">
-              <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
-                <i data-lucide="layers" class="w-10 h-10"></i>
+              <div class="w-28 h-28 bg-blue-100 text-blue-600 rounded-[1.75rem] flex items-center justify-center mb-7 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="layers" class="w-14 h-14"></i>
               </div>
-              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-blue-700 transition-colors tracking-tight">PDFファイル結合</h3>
-              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">複数のPDFをまとめて1つのファイルに結合。ページ指定や並び替えも可能。</p>
+              <h3 class="text-2xl font-bold text-slate-800 whitespace-nowrap group-hover:text-blue-700 transition-colors tracking-tight">PDFファイル結合</h3>
             </div>
           </button>
 
           <!-- 編集カード -->
-          <button onclick="switchTab('editor')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-indigo-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+          <button onclick="switchTab('editor')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-indigo-300 overflow-hidden w-full md:w-[calc((100%-2rem)/2)] lg:w-[calc((100%-4rem)/3)] min-h-[300px] justify-center hover:-translate-y-1">
             <div class="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div class="relative z-10 flex flex-col items-center">
-              <div class="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
-                <i data-lucide="file-edit" class="w-10 h-10"></i>
+              <div class="w-28 h-28 bg-indigo-100 text-indigo-600 rounded-[1.75rem] flex items-center justify-center mb-7 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="file-edit" class="w-14 h-14"></i>
               </div>
-              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-indigo-700 transition-colors tracking-tight">PDF編集</h3>
-              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">PDF上にテキスト、画像、図形を自由に配置。白塗りで不要な箇所を隠して保存。</p>
+              <h3 class="text-2xl font-bold text-slate-800 whitespace-nowrap group-hover:text-indigo-700 transition-colors tracking-tight">PDF編集</h3>
             </div>
           </button>
 
           <!-- PDF圧縮カード -->
-          <button onclick="switchTab('compressor')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-violet-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+          <button onclick="switchTab('compressor')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-violet-300 overflow-hidden w-full md:w-[calc((100%-2rem)/2)] lg:w-[calc((100%-4rem)/3)] min-h-[300px] justify-center hover:-translate-y-1">
             <div class="absolute inset-0 bg-gradient-to-br from-violet-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div class="relative z-10 flex flex-col items-center">
-              <div class="w-20 h-20 bg-violet-100 text-violet-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
-                <i data-lucide="file-down" class="w-10 h-10"></i>
+              <div class="w-28 h-28 bg-violet-100 text-violet-600 rounded-[1.75rem] flex items-center justify-center mb-7 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="file-down" class="w-14 h-14"></i>
               </div>
-              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-violet-700 transition-colors tracking-tight">PDF圧縮</h3>
-              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">PDFのファイルサイズを最適化。画質設定を選択するだけで軽量化して保存。</p>
+              <h3 class="text-2xl font-bold text-slate-800 whitespace-nowrap group-hover:text-violet-700 transition-colors tracking-tight">PDF圧縮</h3>
+            </div>
+          </button>
+
+          <!-- PDF画像抽出カード -->
+          <button onclick="switchTab('extractor')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-amber-300 overflow-hidden w-full md:w-[calc((100%-2rem)/2)] lg:w-[calc((100%-4rem)/3)] min-h-[300px] justify-center hover:-translate-y-1">
+            <div class="absolute inset-0 bg-gradient-to-br from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative z-10 flex flex-col items-center">
+              <div class="w-28 h-28 bg-amber-100 text-amber-600 rounded-[1.75rem] flex items-center justify-center mb-7 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="images" class="w-14 h-14"></i>
+              </div>
+              <h3 class="text-2xl font-bold text-slate-800 whitespace-nowrap group-hover:text-amber-700 transition-colors tracking-tight">PDF画像抽出</h3>
             </div>
           </button>
 
           <!-- HEIC→JPG変換カード -->
-          <button onclick="switchTab('converter')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-emerald-300 overflow-hidden text-left w-full min-h-[300px] justify-center">
+          <button onclick="switchTab('converter')" class="group relative bg-white rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 p-8 sm:p-10 flex flex-col items-center text-center border border-slate-200 hover:border-emerald-300 overflow-hidden w-full md:w-[calc((100%-2rem)/2)] lg:w-[calc((100%-4rem)/3)] min-h-[300px] justify-center hover:-translate-y-1">
             <div class="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div class="relative z-10 flex flex-col items-center">
-              <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-[1.25rem] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
-                <i data-lucide="image" class="w-10 h-10"></i>
+              <div class="w-28 h-28 bg-emerald-100 text-emerald-600 rounded-[1.75rem] flex items-center justify-center mb-7 group-hover:scale-110 transition-transform shadow-inner">
+                <i data-lucide="image" class="w-14 h-14"></i>
               </div>
-              <h3 class="text-xl font-bold text-slate-800 mb-3 group-hover:text-emerald-700 transition-colors tracking-tight">HEIC→JPG変換</h3>
-              <p class="text-slate-500 text-sm leading-relaxed text-center px-2">iPhoneで撮影したHEIC画像をJPGに一括変換。ブラウザ内で処理するので安心。</p>
+              <h3 class="text-2xl font-bold text-slate-800 whitespace-nowrap group-hover:text-emerald-700 transition-colors tracking-tight">HEIC→JPG変換</h3>
             </div>
           </button>
         </div>
@@ -474,7 +492,7 @@
           
           <div class="text-center space-y-3">
             <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">PDFのファイルサイズを軽量化</h2>
-            <p class="text-slate-500 font-medium">解像度と画質を最適化し、安全にPDFを圧縮します。</p>
+            <p class="text-slate-500 font-medium">文字や図形はそのまま、写真などの画像だけを最適化して画質を保ったまま圧縮します。</p>
           </div>
 
           <!-- ドロップゾーン -->
@@ -536,17 +554,17 @@
                   <button id="compress-level-low" class="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50/30 transition-all text-center">
                     <span class="text-xs font-bold text-slate-400 mb-1">低圧縮</span>
                     <span class="text-sm font-black text-slate-700">最高画質</span>
-                    <span class="text-[10px] text-slate-400 mt-1">スケール: 2.0x</span>
+                    <span class="text-[10px] text-slate-400 mt-1">画像 300dpi・画質92%</span>
                   </button>
                   <button id="compress-level-mid" class="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-violet-500 bg-violet-50/50 transition-all text-center">
                     <span class="text-xs font-bold text-violet-600 mb-1">推奨</span>
                     <span class="text-sm font-black text-slate-800">標準バランス</span>
-                    <span class="text-[10px] text-slate-500 mt-1">スケール: 1.5x</span>
+                    <span class="text-[10px] text-slate-500 mt-1">画像 200dpi・画質85%</span>
                   </button>
                   <button id="compress-level-high" class="flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50/30 transition-all text-center">
                     <span class="text-xs font-bold text-slate-400 mb-1">高圧縮</span>
-                    <span class="text-sm font-black text-slate-700">粗め画質</span>
-                    <span class="text-[10px] text-slate-400 mt-1">スケール: 1.0x</span>
+                    <span class="text-sm font-black text-slate-700">軽さ優先</span>
+                    <span class="text-[10px] text-slate-400 mt-1">画像 150dpi・画質75%</span>
                   </button>
                 </div>
 
@@ -560,18 +578,22 @@
                   <div id="compress-custom-panel" class="hidden pt-4 space-y-4 border-t border-slate-100 mt-3">
                     <div>
                       <div class="flex justify-between items-center mb-1.5">
-                        <label class="text-xs font-bold text-slate-500">解像度スケール (DPI/サイズ)</label>
-                        <span id="custom-scale-val" class="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">1.5x</span>
+                        <label class="text-xs font-bold text-slate-500">画像の最大解像度 (dpi)</label>
+                        <span id="custom-scale-val" class="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">200dpi</span>
                       </div>
-                      <input type="range" id="custom-scale-input" min="0.5" max="3.0" step="0.1" value="1.5" class="w-full accent-violet-600" />
+                      <input type="range" id="custom-scale-input" min="75" max="400" step="25" value="200" class="w-full accent-violet-600" />
                     </div>
                     <div>
                       <div class="flex justify-between items-center mb-1.5">
                         <label class="text-xs font-bold text-slate-500">画像圧縮の品質 (品質)</label>
-                        <span id="custom-quality-val" class="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">70%</span>
+                        <span id="custom-quality-val" class="text-xs font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded">85%</span>
                       </div>
-                      <input type="range" id="custom-quality-input" min="10" max="100" step="5" value="70" class="w-full accent-violet-600" />
+                      <input type="range" id="custom-quality-input" min="40" max="100" step="1" value="85" class="w-full accent-violet-600" />
                     </div>
+                    <label class="flex items-start gap-2 cursor-pointer pt-1">
+                      <input type="checkbox" id="compress-rasterize" class="mt-0.5 accent-violet-600" />
+                      <span class="text-xs text-slate-500 leading-relaxed"><span class="font-bold text-slate-600">全ページを画像化して圧縮する</span><br/>画像の少ないPDFも小さくできますが、文字の選択・検索ができなくなり、文字の輪郭も粗くなります。</span>
+                    </label>
                   </div>
                 </div>
 
@@ -615,9 +637,8 @@
                   <i data-lucide="check-circle" class="w-8 h-8 text-emerald-500"></i>圧縮完了！
                 </h3>
                 
-                <div id="result-alert-msg" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl font-medium text-center">
-                  元のPDFがテキスト主体等の場合、全ページの画像化によりサイズが増加することがあります。設定を下げるか、元のファイルをご利用ください。
-                </div>
+                <p id="result-detail" class="text-xs font-semibold text-slate-500 text-center"></p>
+                <div id="result-alert-msg" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl font-medium text-center"></div>
 
                 <div class="grid grid-cols-2 gap-4 border-y border-slate-200 py-6 my-6">
                   <div class="space-y-2 text-center border-r border-slate-200">
@@ -718,6 +739,83 @@
       </div>
     </div>
 
+    <!-- ------------------ 5. PDF画像抽出ビュー (Extractor) ------------------ -->
+    <div id="view-extractor" class="absolute inset-0 bg-slate-50 overflow-y-auto hidden">
+      <div class="p-4 sm:px-8 sm:py-4">
+        <div class="max-w-[1600px] mx-auto space-y-6 pb-12">
+
+          <div class="text-center space-y-3">
+            <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">PDFから画像を抽出</h2>
+            <p class="text-slate-500 font-medium">PDFに含まれる写真や画像だけを取り出して保存します。JPEG写真は再圧縮せず元の画質のまま取り出します。</p>
+          </div>
+
+          <!-- ドロップゾーン -->
+          <div id="extractor-drop-zone" class="relative border-2 border-dashed border-slate-300 bg-white hover:border-amber-400 hover:bg-amber-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full">
+            <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <input type="file" id="extractor-file-input" accept="application/pdf" class="hidden" />
+            <div id="extractor-drop-zone-content" class="relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300">
+              <div id="extractor-drop-zone-icon" class="p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-amber-100 group-hover:text-amber-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1">
+                <i id="extractor-drop-zone-icon-svg" data-lucide="images" class="w-12 h-12 transition-all duration-300"></i>
+              </div>
+              <div id="extractor-drop-zone-text-container" class="space-y-1 text-center transition-all duration-300">
+                <p id="extractor-drop-zone-text-title" class="text-xl font-bold text-slate-700 group-hover:text-amber-700 transition-colors">画像を取り出すPDFを選択</p>
+                <p id="extractor-drop-zone-sub" class="text-sm font-medium text-slate-400 transition-all duration-300 block">または、ここにファイルをドラッグ＆ドロップ</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 抽出結果 -->
+          <div id="extractor-list-container" class="hidden !mt-3 bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-200/60 overflow-hidden flex flex-col">
+            <div class="p-4 sm:p-5 border-b border-slate-100 bg-white flex flex-wrap items-center justify-between gap-4 shrink-0">
+              <div class="min-w-0">
+                <h2 class="font-bold text-slate-700 flex items-center gap-2">
+                  抽出した画像
+                  <span id="extractor-count" class="bg-amber-50 text-amber-700 text-xs px-2.5 py-1 rounded-full font-bold">0</span>
+                </h2>
+                <p id="extractor-filename" class="text-[11px] font-semibold text-slate-400 mt-1 truncate"></p>
+              </div>
+              <div id="extractor-actions" class="flex flex-wrap items-center gap-3">
+                <label class="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer select-none">
+                  <input type="checkbox" id="extractor-hide-small" checked class="accent-amber-600" />
+                  <span id="extractor-hide-small-label">小さい画像を隠す</span>
+                </label>
+                <button id="extractor-select-all-btn" class="text-xs font-bold text-slate-600 hover:text-amber-700 bg-slate-100 hover:bg-amber-50 px-3 py-2 rounded-lg transition-colors">すべて選択</button>
+                <button id="extractor-download-btn" class="text-sm py-2.5 px-5 rounded-xl text-white font-bold flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(217,119,6,0.25)] bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:cursor-not-allowed">
+                  <i data-lucide="folder-down" class="w-4 h-4"></i><span id="extractor-download-label">選択した画像を保存 (ZIP)</span>
+                </button>
+                <button id="extractor-clear-btn" class="text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg font-bold transition-colors">
+                  クリア
+                </button>
+              </div>
+            </div>
+            <!-- 抽出中の進捗 -->
+            <div id="extractor-progress" class="hidden p-10 flex-col items-center justify-center gap-4 bg-slate-50/50">
+              <i data-lucide="loader-2" class="w-10 h-10 text-amber-500 animate-spin"></i>
+              <p id="extractor-progress-status" class="text-sm font-bold text-slate-600">PDFを解析中...</p>
+              <div class="w-full max-w-md bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                <div id="extractor-progress-bar" class="bg-amber-500 h-full w-0 transition-all duration-300"></div>
+              </div>
+            </div>
+            <!-- 画像が見つからなかったとき -->
+            <div id="extractor-empty" class="hidden p-12 flex-col items-center justify-center gap-3 text-center bg-slate-50/50">
+              <div class="w-16 h-16 bg-white text-slate-300 rounded-full flex items-center justify-center shadow-sm"><i data-lucide="image-off" class="w-8 h-8"></i></div>
+              <p id="extractor-empty-text" class="text-sm font-bold text-slate-500">このPDFには取り出せる画像がありませんでした</p>
+            </div>
+            <ul id="extractor-image-list" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5 p-6 bg-slate-50/50 border-b border-slate-100">
+              <!-- JSで動的にリストが生成されます -->
+            </ul>
+            <div class="p-3 bg-slate-50 text-center shrink-0">
+              <p class="text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1.5">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                処理はすべてお使いのブラウザ内で行われます。外部サーバーにファイルが送信されることはありません。
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -732,12 +830,14 @@
     const tabMergerBtn = document.getElementById('tab-merger');
     const tabCompressorBtn = document.getElementById('tab-compressor');
     const tabConverterBtn = document.getElementById('tab-converter');
+    const tabExtractorBtn = document.getElementById('tab-extractor');
 
     const viewHome = document.getElementById('view-home');
     const viewEditor = document.getElementById('view-editor');
     const viewMerger = document.getElementById('view-merger');
     const viewCompressor = document.getElementById('view-compressor');
     const viewConverter = document.getElementById('view-converter');
+    const viewExtractor = document.getElementById('view-extractor');
 
     const editorActions = document.getElementById('editor-actions');
 
@@ -752,8 +852,9 @@
       tabMergerBtn.className = tab === 'merger' ? activeClass : inactiveClass;
       tabCompressorBtn.className = tab === 'compressor' ? activeClass : inactiveClass;
       tabConverterBtn.className = tab === 'converter' ? activeClass : inactiveClass;
+      tabExtractorBtn.className = tab === 'extractor' ? activeClass : inactiveClass;
 
-      [viewHome, viewEditor, viewMerger, viewCompressor, viewConverter].forEach(v => {
+      [viewHome, viewEditor, viewMerger, viewCompressor, viewConverter, viewExtractor].forEach(v => {
           v.classList.add('hidden');
           v.classList.remove('flex');
       });
@@ -777,6 +878,7 @@
       if (tab === 'merger') viewMerger.classList.remove('hidden');
       else if (tab === 'compressor') viewCompressor.classList.remove('hidden');
       else if (tab === 'converter') viewConverter.classList.remove('hidden');
+      else if (tab === 'extractor') viewExtractor.classList.remove('hidden');
     }
 
     tabHomeBtn.addEventListener('click', () => switchTab('home'));
@@ -784,6 +886,7 @@
     tabMergerBtn.addEventListener('click', () => switchTab('merger'));
     tabCompressorBtn.addEventListener('click', () => switchTab('compressor'));
     tabConverterBtn.addEventListener('click', () => switchTab('converter'));
+    tabExtractorBtn.addEventListener('click', () => switchTab('extractor'));
 
     switchTab('home');
 
@@ -961,6 +1064,8 @@
         if (!compEls.startBtn.disabled) loadCompressorFile(files[0]); // 圧縮処理中は受け付けない
       } else if (currentTab === 'converter') {
         addConverterFiles(files);
+      } else if (currentTab === 'extractor') {
+        if (!isExtracting) loadExtractorFile(files[0]); // 抽出処理中は受け付けない
       }
     });
 
@@ -2137,8 +2242,15 @@
     // ==========================================
     let targetCompressFile = null;
     let compressLevel = 'mid'; // low, mid, high, custom
-    let customCompressScale = 1.5;
-    let customCompressQuality = 70;
+    let customCompressDpi = 200;
+    let customCompressQuality = 85;
+    let compressorResultUrl = null;
+
+    const COMPRESS_PRESETS = {
+      low:  { dpi: 300, quality: 92 },
+      mid:  { dpi: 200, quality: 85 },
+      high: { dpi: 150, quality: 75 }
+    };
 
     const compEls = {
       dropZone: document.getElementById('compressor-drop-zone'),
@@ -2160,7 +2272,9 @@
       scaleVal: document.getElementById('custom-scale-val'),
       qualityInput: document.getElementById('custom-quality-input'),
       qualityVal: document.getElementById('custom-quality-val'),
-      
+      rasterize: document.getElementById('compress-rasterize'),
+      resDetail: document.getElementById('result-detail'),
+
       startBtn: document.getElementById('compress-start-btn'),
       
       standbyPanel: document.getElementById('compressor-standby-panel'),
@@ -2188,19 +2302,13 @@
       compEls.btnMid.className = level === 'mid' ? activeBtnClass : inactiveBtnClass;
       compEls.btnHigh.className = level === 'high' ? activeBtnClass : inactiveBtnClass;
 
-      if (level === 'low') {
-        customCompressScale = 2.0;
-        customCompressQuality = 90;
-      } else if (level === 'mid') {
-        customCompressScale = 1.5;
-        customCompressQuality = 70;
-      } else if (level === 'high') {
-        customCompressScale = 1.0;
-        customCompressQuality = 50;
+      if (COMPRESS_PRESETS[level]) {
+        customCompressDpi = COMPRESS_PRESETS[level].dpi;
+        customCompressQuality = COMPRESS_PRESETS[level].quality;
       }
-      
-      compEls.scaleInput.value = customCompressScale;
-      compEls.scaleVal.textContent = `${customCompressScale}x`;
+
+      compEls.scaleInput.value = customCompressDpi;
+      compEls.scaleVal.textContent = `${customCompressDpi}dpi`;
       compEls.qualityInput.value = customCompressQuality;
       compEls.qualityVal.textContent = `${customCompressQuality}%`;
     }
@@ -2215,8 +2323,8 @@
     });
 
     compEls.scaleInput.addEventListener('input', (e) => {
-      customCompressScale = parseFloat(e.target.value);
-      compEls.scaleVal.textContent = `${customCompressScale}x`;
+      customCompressDpi = parseInt(e.target.value, 10);
+      compEls.scaleVal.textContent = `${customCompressDpi}dpi`;
       compressLevel = 'custom'; selectCompressLevel('custom');
     });
 
@@ -2272,6 +2380,180 @@
       if (e.dataTransfer.files.length > 0) loadCompressorFile(e.dataTransfer.files[0]);
     });
 
+    // PNG予測子 (Predictor 10〜15) を元に戻す
+    function undoPngPredictor(data, width, height, comps) {
+      const rowLen = width * comps;
+      if (data.length < (rowLen + 1) * height) return null;
+      const out = new Uint8Array(rowLen * height);
+      let prev = new Uint8Array(rowLen);
+      for (let y = 0, src = 0; y < height; y++) {
+        const type = data[src++];
+        const row = out.subarray(y * rowLen, (y + 1) * rowLen);
+        for (let x = 0; x < rowLen; x++) {
+          const a = x >= comps ? row[x - comps] : 0, b = prev[x], c = x >= comps ? prev[x - comps] : 0;
+          let pred = 0;
+          if (type === 1) pred = a;
+          else if (type === 2) pred = b;
+          else if (type === 3) pred = (a + b) >> 1;
+          else if (type === 4) {
+            const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+            pred = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+          }
+          row[x] = (data[src++] + pred) & 255;
+        }
+        prev = row;
+      }
+      return out;
+    }
+
+    // 画像XObjectを1つ再圧縮する。効果がない/扱えない形式なら null を返して元のまま残す
+    async function recompressImageStream(stream, context, maxPx, quality) {
+      const { PDFName, PDFRawStream, PDFNumber, PDFArray, PDFDict } = window.PDFLib;
+      const N = (n) => PDFName.of(n);
+      const dict = stream.dict;
+      const num = (d, key) => { const v = d.lookup(N(key)); return v instanceof PDFNumber ? v.asNumber() : null; };
+
+      const width = num(dict, 'Width'), height = num(dict, 'Height');
+      if (!width || !height || num(dict, 'BitsPerComponent') !== 8) return null;
+      // マスク・特殊なデコード指定のある画像は見た目が変わる恐れがあるので触らない
+      if (String(dict.lookup(N('ImageMask'))) === 'true' || dict.has(N('Mask')) || dict.has(N('Decode'))) return null;
+      const original = stream.contents;
+      if (original.length < 20 * 1024) return null; // 小さい画像は効果が薄い
+
+      let filter = dict.lookup(N('Filter'));
+      if (filter instanceof PDFArray) { if (filter.size() !== 1) return null; filter = filter.lookup(0); }
+      if (filter !== N('DCTDecode') && filter !== N('FlateDecode')) return null;
+
+      const cs = dict.lookup(N('ColorSpace'));
+      let comps = null;
+      if (cs === N('DeviceRGB')) comps = 3;
+      else if (cs === N('DeviceGray')) comps = 1;
+      else if (cs instanceof PDFArray && cs.lookup(0) === N('ICCBased')) {
+        const icc = cs.lookup(1);
+        if (icc && icc.dict) comps = num(icc.dict, 'N');
+      }
+      if (comps !== 1 && comps !== 3) return null; // CMYK・特色などは対象外
+
+      let source;
+      if (filter === N('DCTDecode')) {
+        source = await createImageBitmap(new Blob([original], { type: 'image/jpeg' }), { imageOrientation: 'none' });
+        if (source.width !== width || source.height !== height) { source.close(); return null; }
+      } else {
+        let pixels = new Uint8Array(await new Response(new Blob([original]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer());
+        const parms = dict.lookup(N('DecodeParms'));
+        if (parms instanceof PDFDict) {
+          const predictor = num(parms, 'Predictor') || 1;
+          if (predictor >= 10) {
+            if ((num(parms, 'Colors') || 1) !== comps || (num(parms, 'Columns') || 1) !== width || (num(parms, 'BitsPerComponent') || 8) !== 8) return null;
+            pixels = undoPngPredictor(pixels, width, height, comps);
+            if (!pixels) return null;
+          } else if (predictor !== 1) return null;
+        } else if (parms) return null;
+        if (pixels.length < width * height * comps) return null;
+        const rgba = new Uint8ClampedArray(width * height * 4);
+        for (let p = 0, s = 0, d = 0; p < width * height; p++, d += 4) {
+          if (comps === 3) { rgba[d] = pixels[s++]; rgba[d + 1] = pixels[s++]; rgba[d + 2] = pixels[s++]; }
+          else { rgba[d] = rgba[d + 1] = rgba[d + 2] = pixels[s++]; }
+          rgba[d + 3] = 255;
+        }
+        source = await createImageBitmap(new ImageData(rgba, width, height));
+      }
+
+      const scale = Math.min(1, maxPx / Math.max(width, height));
+      const w = Math.max(1, Math.round(width * scale)), h = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source, 0, 0, w, h);
+      source.close();
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality / 100));
+      if (!blob) return null;
+      const jpeg = new Uint8Array(await blob.arrayBuffer());
+
+      // 十分に小さくならないなら元の画像を残す（無駄な再圧縮で劣化させない）
+      // 可逆圧縮(Flate)の画像は図版・スクショの可能性が高いので、半分以下になる場合だけ置き換える
+      const threshold = filter === N('FlateDecode') ? 0.5 : 0.9;
+      if (jpeg.length > original.length * threshold) return null;
+
+      const newDict = dict.clone(context);
+      newDict.set(N('Filter'), N('DCTDecode'));
+      newDict.delete(N('DecodeParms'));
+      newDict.set(N('Width'), PDFNumber.of(w));
+      newDict.set(N('Height'), PDFNumber.of(h));
+      newDict.set(N('BitsPerComponent'), PDFNumber.of(8));
+      if (comps === 1) newDict.set(N('ColorSpace'), N('DeviceRGB')); // ブラウザのJPEG出力はカラーのため
+      return PDFRawStream.of(newDict, jpeg);
+    }
+
+    // 文字・図形はベクターのまま残し、埋め込み画像だけを解像度上限と品質で再圧縮する
+    async function compressPdfImages(bytes, dpi, quality, onProgress) {
+      const { PDFDocument, PDFName, PDFRawStream } = window.PDFLib;
+      const N = (n) => PDFName.of(n);
+      const pdfDoc = await PDFDocument.load(bytes, { updateMetadata: false });
+      const context = pdfDoc.context;
+
+      // 画像の表示サイズは最大でもページ寸法とみなし、その大きさで指定dpiになるピクセル数を上限にする
+      const maxPagePt = Math.max(...pdfDoc.getPages().map(p => { const { width, height } = p.getSize(); return Math.max(width, height); }));
+      const maxPx = Math.ceil(maxPagePt / 72 * dpi);
+
+      const images = [];
+      const smaskRefs = new Set();
+      for (const [ref, obj] of context.enumerateIndirectObjects()) {
+        if (!(obj instanceof PDFRawStream) || obj.dict.get(N('Subtype')) !== N('Image')) continue;
+        images.push([ref, obj]);
+        const smask = obj.dict.get(N('SMask'));
+        if (smask) smaskRefs.add(smask.toString());
+      }
+      const targets = images.filter(([ref]) => !smaskRefs.has(ref.toString())); // 透明度マスクは劣化させない
+
+      let replaced = 0;
+      for (let i = 0; i < targets.length; i++) {
+        onProgress(i, targets.length);
+        const [ref, stream] = targets[i];
+        try {
+          const newStream = await recompressImageStream(stream, context, maxPx, quality);
+          if (newStream) { context.assign(ref, newStream); replaced++; }
+        } catch (err) {
+          console.warn('画像の再圧縮をスキップしました', err);
+        }
+      }
+      onProgress(targets.length, targets.length);
+      const out = await pdfDoc.save({ useObjectStreams: true });
+      return { blob: new Blob([out], { type: 'application/pdf' }), imageCount: targets.length, replaced };
+    }
+
+    // 全ページを画像化して作り直す（文字の選択・検索はできなくなる）
+    async function compressPdfRasterize(bytes, dpi, quality, onProgress) {
+      const { jsPDF } = window.jspdf;
+      const scale = dpi / 72;
+      const pdf = await pdfjsLib.getDocument({
+        data: bytes,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+        cMapPacked: true
+      }).promise;
+      const total = pdf.numPages;
+      let doc = null;
+      for (let i = 1; i <= total; i++) {
+        onProgress(i - 1, total);
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        const imgData = canvas.toDataURL('image/jpeg', quality / 100);
+        const pdfWidth = viewport.width / scale * 0.75;
+        const pdfHeight = viewport.height / scale * 0.75;
+        const orientation = viewport.width > viewport.height ? 'l' : 'p';
+        if (!doc) doc = new jsPDF({ orientation, unit: 'px', format: [pdfWidth, pdfHeight] });
+        else doc.addPage([pdfWidth, pdfHeight], orientation);
+        doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      }
+      onProgress(total, total);
+      return { blob: doc.output('blob'), pageCount: total };
+    }
+
     // 重複登録を絶対に防ぐために .onclick で上書き登録
     compEls.startBtn.onclick = async (e) => {
       e.preventDefault();
@@ -2285,82 +2567,55 @@
       compEls.resultPanel.classList.add('hidden');
       compEls.resultPanel.classList.remove('flex');
       
-      const { jsPDF } = window.jspdf;
-      
+      const rasterize = compEls.rasterize.checked;
+      const onProgress = (done, total) => {
+        const progress = total > 0 ? Math.round((done / total) * 100) : 100;
+        compEls.progressPercent.textContent = `${progress}%`;
+        compEls.progressBar.style.width = `${progress}%`;
+        if (done >= total) compEls.progressStatus.textContent = 'PDFを書き出し中...';
+        else compEls.progressStatus.textContent = rasterize ? `ページ ${done + 1} / ${total} を処理中...` : `画像 ${done + 1} / ${total} を最適化中...`;
+      };
+
       try {
         const arrayBuffer = await targetCompressFile.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ 
-          data: arrayBuffer,
-          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
-          cMapPacked: true
-        }).promise;
-        const total = pdf.numPages;
-        
-        let doc = null;
-        
-        for (let i = 1; i <= total; i++) {
-          const progress = Math.round(((i - 1) / total) * 100);
-          compEls.progressPercent.textContent = `${progress}%`;
-          compEls.progressStatus.textContent = `ページ ${i} / ${total} を処理中...`;
-          compEls.progressBar.style.width = `${progress}%`;
-          
-          const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: customCompressScale });
-          
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          
-          const imgData = canvas.toDataURL('image/jpeg', customCompressQuality / 100);
-          
-          const pdfWidth = viewport.width / customCompressScale * 0.75; 
-          const pdfHeight = viewport.height / customCompressScale * 0.75;
-          const orientation = viewport.width > viewport.height ? 'l' : 'p';
-          
-          if (!doc) doc = new jsPDF({ orientation, unit: 'px', format: [pdfWidth, pdfHeight] });
-          else doc.addPage([pdfWidth, pdfHeight], orientation);
-          
-          doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-        }
-        
-        compEls.progressPercent.textContent = `100%`;
+        compEls.progressStatus.textContent = 'PDFを解析中...';
+        const result = rasterize
+          ? await compressPdfRasterize(arrayBuffer, customCompressDpi, customCompressQuality, onProgress)
+          : await compressPdfImages(arrayBuffer, customCompressDpi, customCompressQuality, onProgress);
+
         compEls.progressStatus.textContent = `完了`;
-        compEls.progressBar.style.width = `100%`;
-        
-        const compressedOutput = doc.output('blob');
-        const compressedUrl = URL.createObjectURL(compressedOutput);
-        
+
+        // 元より小さくならなかった場合は元のファイルをそのまま渡す（画質もサイズも悪化させない）
+        const isNotSmaller = result.blob.size >= targetCompressFile.size;
+        const compressedOutput = isNotSmaller ? targetCompressFile : result.blob;
+        if (compressorResultUrl) URL.revokeObjectURL(compressorResultUrl);
+        compressorResultUrl = URL.createObjectURL(compressedOutput);
+        const compressedUrl = compressorResultUrl;
+
         const beforeSizeMB = targetCompressFile.size / 1024 / 1024;
         const afterSizeMB = compressedOutput.size / 1024 / 1024;
-        
-        let percentText = '';
-        let isIncreased = false;
-        
-        if (afterSizeMB > beforeSizeMB) {
-          isIncreased = true;
-          const incPercent = Math.round(((afterSizeMB - beforeSizeMB) / beforeSizeMB) * 100);
-          percentText = `+${incPercent}%`;
-        } else {
-          const decPercent = Math.round(((beforeSizeMB - afterSizeMB) / beforeSizeMB) * 100);
-          percentText = `-${decPercent}%`;
-        }
-        
+        const decPercent = Math.round(((beforeSizeMB - afterSizeMB) / beforeSizeMB) * 100);
+        const percentText = isNotSmaller ? '±0%' : `-${decPercent}%`;
+
         compEls.resBefore.textContent = `${beforeSizeMB.toFixed(2)} MB`;
         compEls.resAfter.textContent = `${afterSizeMB.toFixed(2)} MB`;
-        
+        compEls.resDetail.textContent = rasterize
+          ? `全${result.pageCount}ページを画像化しました`
+          : (result.imageCount > 0 ? `画像 ${result.imageCount} 個中 ${result.replaced} 個を最適化（文字・図形は元のまま）` : 'このPDFには圧縮できる画像がありませんでした');
+
         const resPercentEl = document.getElementById('result-percent');
         const resTitleEl = document.getElementById('result-title');
         const resAlertEl = document.getElementById('result-alert-msg');
-        
-        if (isIncreased) {
-          compEls.resAfter.className = "font-extrabold text-red-600 text-2xl";
-          resPercentEl.className = "text-4xl font-black text-red-500";
+
+        if (isNotSmaller) {
+          compEls.resAfter.className = "font-extrabold text-slate-600 text-2xl";
+          resPercentEl.className = "text-4xl font-black text-slate-500";
           resPercentEl.textContent = percentText;
-          resTitleEl.innerHTML = `<i data-lucide="alert-triangle" class="w-8 h-8 text-amber-500"></i>変換完了 (サイズ増加)`;
+          resTitleEl.innerHTML = `<i data-lucide="info" class="w-8 h-8 text-amber-500"></i>これ以上小さくできませんでした`;
           resTitleEl.className = "font-bold text-slate-800 text-2xl flex items-center justify-center gap-2 mb-2";
+          resAlertEl.textContent = rasterize
+            ? '画像化すると元より大きくなるため、元のファイルをそのまま保存します。dpiや品質を下げると小さくなる場合があります。'
+            : '画質を保ったまま縮められる部分がなかったため、元のファイルをそのまま保存します。「高圧縮」や、高度な設定の「全ページを画像化」を試すと小さくなる場合があります。';
           resAlertEl.classList.remove('hidden');
         } else {
           compEls.resAfter.className = "font-extrabold text-emerald-700 text-2xl";
@@ -2391,6 +2646,7 @@
 
     const resetCompressorState = () => {
       targetCompressFile = null;
+      if (compressorResultUrl) { URL.revokeObjectURL(compressorResultUrl); compressorResultUrl = null; }
       compEls.fileInput.value = ''; 
       compEls.workArea.classList.add('hidden');
       compEls.standbyPanel.classList.remove('hidden');
@@ -2731,6 +2987,380 @@
       } finally {
         convEls.downloadAllBtn.disabled = false;
         convEls.downloadAllLabel.textContent = 'まとめて保存 (ZIP)';
+      }
+    });
+
+    // ==========================================
+    // 5. PDF画像抽出ツール (Extractor) のロジック
+    // ==========================================
+    // item: { id, page, name, width, height, format('JPG'|'PNG'), blob, url, selected, small }
+    let extractorImages = [];
+    let extractorBaseName = '';
+    let isExtracting = false;
+    const EXTRACTOR_SMALL_PX = 64; // 縦横どちらかがこれ未満の画像はアイコンや罫線などとみなす
+    const EXTRACTOR_MAX_PIXELS = 50000000; // 描画で復元する画像の上限（ブラウザのキャンバス制限対策）
+
+    const extEls = {
+      dropZone: document.getElementById('extractor-drop-zone'),
+      dropZoneSub: document.getElementById('extractor-drop-zone-sub'),
+      dropZoneContent: document.getElementById('extractor-drop-zone-content'),
+      dropZoneIcon: document.getElementById('extractor-drop-zone-icon'),
+      get dropZoneIconSvg() { return document.getElementById('extractor-drop-zone-icon-svg'); },
+      dropZoneTextContainer: document.getElementById('extractor-drop-zone-text-container'),
+      dropZoneTextTitle: document.getElementById('extractor-drop-zone-text-title'),
+      fileInput: document.getElementById('extractor-file-input'),
+      listContainer: document.getElementById('extractor-list-container'),
+      imageList: document.getElementById('extractor-image-list'),
+      count: document.getElementById('extractor-count'),
+      filename: document.getElementById('extractor-filename'),
+      actions: document.getElementById('extractor-actions'),
+      hideSmall: document.getElementById('extractor-hide-small'),
+      hideSmallLabel: document.getElementById('extractor-hide-small-label'),
+      selectAllBtn: document.getElementById('extractor-select-all-btn'),
+      downloadBtn: document.getElementById('extractor-download-btn'),
+      downloadLabel: document.getElementById('extractor-download-label'),
+      clearBtn: document.getElementById('extractor-clear-btn'),
+      progress: document.getElementById('extractor-progress'),
+      progressStatus: document.getElementById('extractor-progress-status'),
+      progressBar: document.getElementById('extractor-progress-bar'),
+      empty: document.getElementById('extractor-empty'),
+      emptyText: document.getElementById('extractor-empty-text'),
+    };
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+      return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+    }
+
+    // ページ（とページ内のフォーム）から参照されている画像を、ページ順・出現順に集める
+    function collectPageImages(pdfDoc) {
+      const { PDFName, PDFDict, PDFRef } = window.PDFLib;
+      const N = (n) => PDFName.of(n);
+      const found = new Map(); // "12 0 R" -> { ref, stream, page }
+      const visitedForms = new Set();
+      const walk = (resources, pageNum) => {
+        if (!(resources instanceof PDFDict)) return;
+        const xobjects = resources.lookup(N('XObject'));
+        if (!(xobjects instanceof PDFDict)) return;
+        for (const [, value] of xobjects.entries()) {
+          if (!(value instanceof PDFRef)) continue;
+          const key = value.toString();
+          const obj = pdfDoc.context.lookup(value);
+          if (!obj || !obj.dict) continue;
+          const subtype = obj.dict.get(N('Subtype'));
+          if (subtype === N('Image')) {
+            if (!found.has(key)) found.set(key, { ref: value, stream: obj, page: pageNum });
+          } else if (subtype === N('Form') && !visitedForms.has(key)) {
+            visitedForms.add(key);
+            walk(obj.dict.lookup(N('Resources')), pageNum);
+          }
+        }
+      };
+      pdfDoc.getPages().forEach((page, i) => walk(page.node.Resources(), i + 1));
+      return [...found.values()];
+    }
+
+    // そのまま .jpg として保存できる素直なJPEG画像か（RGB/グレー、透過やデコード指定なし）
+    function isPlainJpeg(stream) {
+      const { PDFName, PDFNumber, PDFArray } = window.PDFLib;
+      const N = (n) => PDFName.of(n);
+      const dict = stream.dict;
+      let filter = dict.lookup(N('Filter'));
+      if (filter instanceof PDFArray) { if (filter.size() !== 1) return false; filter = filter.lookup(0); }
+      if (filter !== N('DCTDecode')) return false;
+      if (dict.has(N('SMask')) || dict.has(N('Mask')) || dict.has(N('Decode')) || String(dict.lookup(N('ImageMask'))) === 'true') return false;
+      const cs = dict.lookup(N('ColorSpace'));
+      let comps = null;
+      if (cs === N('DeviceRGB')) comps = 3;
+      else if (cs === N('DeviceGray')) comps = 1;
+      else if (cs instanceof PDFArray && cs.lookup(0) === N('ICCBased')) {
+        const n = cs.lookup(1) && cs.lookup(1).dict && cs.lookup(1).dict.lookup(N('N'));
+        if (n instanceof PDFNumber) comps = n.asNumber();
+      }
+      const bytes = stream.contents;
+      return (comps === 1 || comps === 3) && bytes.length > 2 && bytes[0] === 0xFF && bytes[1] === 0xD8;
+    }
+
+    // 画像を「その画像1枚だけのページ」に貼ったPDFを作り、pdf.jsで等倍描画して取り出す
+    // （透過・CMYK・JPEG2000などブラウザが直接読めない形式も、pdf.jsに任せて正しい色で復元できる）
+    async function renderImagesViaPdfjs(srcDoc, entries, onEach) {
+      const { PDFDocument, PDFObjectCopier, PDFName } = window.PDFLib;
+      const mini = await PDFDocument.create();
+      const copier = PDFObjectCopier.for(srcDoc.context, mini.context);
+      const scales = entries.map(entry => {
+        const scale = Math.min(1, Math.sqrt(EXTRACTOR_MAX_PIXELS / (entry.width * entry.height)));
+        const page = mini.addPage([entry.width, entry.height]);
+        page.node.setXObject(PDFName.of('Im0'), copier.copy(entry.ref));
+        const content = mini.context.register(mini.context.stream(`q ${entry.width} 0 0 ${entry.height} 0 0 cm /Im0 Do Q`));
+        page.node.set(PDFName.of('Contents'), content);
+        return scale;
+      });
+      const pdf = await pdfjsLib.getDocument({ data: await mini.save() }).promise;
+      try {
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          const page = await pdf.getPage(i + 1);
+          const viewport = page.getViewport({ scale: scales[i] });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(viewport.width));
+          canvas.height = Math.max(1, Math.round(viewport.height));
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport, background: 'rgba(0,0,0,0)' }).promise;
+          page.cleanup();
+          // 元が非可逆(JPEG/JPEG2000)で透過なしならJPG、それ以外は劣化しないPNGで保存
+          const type = entry.preferJpeg ? 'image/jpeg' : 'image/png';
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, type, 0.95));
+          canvas.width = canvas.height = 0;
+          if (blob) await onEach(entry, blob, type === 'image/jpeg' ? 'JPG' : 'PNG');
+        }
+      } finally {
+        pdf.destroy();
+      }
+    }
+
+    async function extractPdfImages(bytes, onProgress) {
+      const { PDFDocument, PDFName, PDFNumber, PDFArray } = window.PDFLib;
+      const N = (n) => PDFName.of(n);
+      const pdfDoc = await PDFDocument.load(bytes, { updateMetadata: false });
+      const pageImages = collectPageImages(pdfDoc);
+      const results = [];
+      const renderTargets = [];
+      let done = 0;
+
+      for (const [seq, img] of pageImages.entries()) {
+        const dict = img.stream.dict;
+        const num = (key) => { const v = dict.lookup(N(key)); return v instanceof PDFNumber ? v.asNumber() : 0; };
+        const width = num('Width'), height = num('Height');
+        if (!width || !height) { done++; continue; }
+        if (isPlainJpeg(img.stream)) {
+          // JPEG写真は中身をそのまま取り出す（再圧縮しないので画質劣化ゼロ）
+          results.push({ seq, page: img.page, width, height, format: 'JPG', blob: new Blob([img.stream.contents], { type: 'image/jpeg' }) });
+          onProgress(++done, pageImages.length);
+        } else {
+          let filter = dict.lookup(N('Filter'));
+          if (filter instanceof PDFArray) filter = filter.lookup(filter.size() - 1);
+          const lossy = filter === N('DCTDecode') || filter === N('JPXDecode');
+          const hasAlpha = dict.has(N('SMask')) || dict.has(N('Mask')) || String(dict.lookup(N('ImageMask'))) === 'true';
+          renderTargets.push({ seq, ref: img.ref, page: img.page, width, height, preferJpeg: lossy && !hasAlpha });
+        }
+      }
+
+      if (renderTargets.length > 0) {
+        await renderImagesViaPdfjs(pdfDoc, renderTargets, async (entry, blob, format) => {
+          results.push({ seq: entry.seq, page: entry.page, width: entry.width, height: entry.height, format, blob });
+          onProgress(++done, pageImages.length);
+        });
+      }
+
+      // ページ順に並べ直して「ファイル名_p03_01.jpg」のような名前を付ける
+      results.sort((a, b) => a.seq - b.seq);
+      const digits = String(pdfDoc.getPageCount()).length;
+      const perPage = {};
+      results.forEach(r => {
+        perPage[r.page] = (perPage[r.page] || 0) + 1;
+        r.name = `${extractorBaseName}_p${String(r.page).padStart(digits, '0')}_${String(perPage[r.page]).padStart(2, '0')}.${r.format.toLowerCase()}`;
+      });
+      return results;
+    }
+
+    function releaseExtractorImages() {
+      extractorImages.forEach(item => URL.revokeObjectURL(item.url));
+      extractorImages = [];
+    }
+
+    function visibleExtractorImages() {
+      return extEls.hideSmall.checked ? extractorImages.filter(item => !item.small) : extractorImages;
+    }
+
+    function setExtractorDropZoneSlim(slim) {
+      if (slim) {
+        extEls.dropZone.className = "relative border-2 border-dashed border-amber-300 bg-amber-50/50 hover:border-amber-400 hover:bg-amber-100/50 rounded-xl p-3 cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden w-full";
+        extEls.dropZoneContent.className = "relative z-10 flex flex-row items-center justify-center space-x-3 pointer-events-none transition-all duration-300";
+        extEls.dropZoneIcon.className = "p-2 rounded-lg bg-white text-amber-500 group-hover:text-amber-600 transition-all duration-300 shadow-sm shrink-0";
+        extEls.dropZoneIconSvg.setAttribute('class', "w-5 h-5 transition-all duration-300");
+        extEls.dropZoneTextContainer.className = "text-left transition-all duration-300";
+        extEls.dropZoneTextTitle.className = "text-sm font-bold text-slate-700 group-hover:text-amber-700 transition-colors";
+        extEls.dropZoneSub.className = "text-[11px] font-medium text-slate-400 transition-all duration-300 block mt-0.5";
+        extEls.dropZoneTextTitle.textContent = "別のPDFを選択";
+        extEls.dropZoneSub.textContent = "クリック、またはドラッグ＆ドロップで差し替え";
+      } else {
+        extEls.dropZone.className = "relative border-2 border-dashed border-slate-300 bg-white hover:border-amber-400 hover:bg-amber-50/30 rounded-3xl p-10 sm:p-16 text-center cursor-pointer shadow-sm group transition-all duration-300 ease-out overflow-hidden mx-auto w-full";
+        extEls.dropZoneContent.className = "relative z-10 flex flex-col items-center justify-center space-y-5 pointer-events-none transition-all duration-300";
+        extEls.dropZoneIcon.className = "p-6 rounded-3xl bg-slate-100 text-slate-400 group-hover:bg-amber-100 group-hover:text-amber-600 transition-all duration-300 shadow-inner group-hover:scale-110 group-hover:-translate-y-1";
+        extEls.dropZoneIconSvg.setAttribute('class', "w-12 h-12 transition-all duration-300");
+        extEls.dropZoneTextContainer.className = "space-y-1 text-center transition-all duration-300";
+        extEls.dropZoneTextTitle.className = "text-xl font-bold text-slate-700 group-hover:text-amber-700 transition-colors";
+        extEls.dropZoneSub.className = "text-sm font-medium text-slate-400 transition-all duration-300 block";
+        extEls.dropZoneTextTitle.textContent = "画像を取り出すPDFを選択";
+        extEls.dropZoneSub.textContent = "または、ここにファイルをドラッグ＆ドロップ";
+      }
+    }
+
+    function updateExtractorUI() {
+      const visible = visibleExtractorImages();
+      const smallCount = extractorImages.filter(item => item.small).length;
+      const selectedCount = visible.filter(item => item.selected).length;
+      const allSelected = visible.length > 0 && selectedCount === visible.length;
+
+      extEls.count.textContent = visible.length;
+      extEls.hideSmallLabel.textContent = `小さい画像を隠す (${smallCount}件)`;
+      extEls.hideSmallLabel.parentElement.classList.toggle('hidden', smallCount === 0);
+      extEls.selectAllBtn.textContent = allSelected ? 'すべて解除' : 'すべて選択';
+      extEls.selectAllBtn.disabled = isExtracting || visible.length === 0;
+      extEls.downloadLabel.textContent = selectedCount > 1 ? `選択した画像を保存 (ZIP・${selectedCount}件)` : (selectedCount === 1 ? '選択した画像を保存' : '画像を選択してください');
+      extEls.downloadBtn.disabled = isExtracting || selectedCount === 0;
+      extEls.actions.classList.toggle('hidden', isExtracting);
+
+      extEls.progress.classList.toggle('hidden', !isExtracting);
+      extEls.progress.classList.toggle('flex', isExtracting);
+      const showEmpty = !isExtracting && visible.length === 0;
+      extEls.empty.classList.toggle('hidden', !showEmpty);
+      extEls.empty.classList.toggle('flex', showEmpty);
+      extEls.emptyText.textContent = extractorImages.length > 0
+        ? '小さい画像しか見つかりませんでした。「小さい画像を隠す」のチェックを外すと表示されます。'
+        : 'このPDFには取り出せる画像がありませんでした';
+      extEls.imageList.classList.toggle('hidden', isExtracting || visible.length === 0);
+
+      extEls.imageList.innerHTML = '';
+      visible.forEach(item => {
+        const safeName = item.name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const li = document.createElement('li');
+        li.className = `flex flex-col bg-white border rounded-2xl shadow-sm hover:shadow-lg transition-all p-3 relative ${item.selected ? 'border-amber-400 ring-2 ring-amber-200' : 'border-slate-200/80'}`;
+        li.innerHTML = `
+          <button data-action="toggle" data-id="${item.id}" class="w-full aspect-square checkerboard border border-slate-200/50 rounded-xl overflow-hidden relative shadow-inner cursor-pointer" title="クリックで選択／解除">
+            <img src="${item.url}" loading="lazy" class="absolute inset-0 w-full h-full object-contain pointer-events-none" />
+            <span class="absolute top-2 left-2 bg-slate-800/70 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm pointer-events-none">p.${item.page}</span>
+            <span class="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-sm pointer-events-none ${item.selected ? 'bg-amber-500 text-white' : 'bg-white/90 border border-slate-300 text-transparent'}">
+              <i data-lucide="check" class="w-4 h-4"></i>
+            </span>
+          </button>
+          <div class="mt-3 px-0.5 overflow-hidden">
+            <p class="text-[13px] font-bold text-slate-700 truncate" title="${safeName}">${safeName}</p>
+            <p class="text-[11px] font-semibold text-slate-400 mt-0.5">${item.width}×${item.height}px・${item.format}・${formatFileSize(item.blob.size)}</p>
+          </div>
+          <a href="${item.url}" download="${safeName}" class="mt-3 w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition-colors border border-amber-100">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>この画像を保存
+          </a>
+        `;
+        extEls.imageList.appendChild(li);
+      });
+
+      lucide.createIcons();
+    }
+
+    async function loadExtractorFile(file) {
+      if (isExtracting) return;
+      if (!file || !(file.type === 'application/pdf' || /\.pdf$/i.test(file.name))) { alert("有効なPDFファイルを選択してください。"); return; }
+      if (!window.PDFLib) { alert("PDFライブラリが読み込まれていません。インターネット接続を確認してください。"); return; }
+
+      releaseExtractorImages();
+      extractorBaseName = file.name.replace(/\.[^/.]+$/, "") || 'pdf';
+      extEls.filename.textContent = file.name;
+      isExtracting = true;
+      extEls.progressStatus.textContent = 'PDFを解析中...';
+      extEls.progressBar.style.width = '0%';
+      extEls.listContainer.classList.remove('hidden');
+      setExtractorDropZoneSlim(true);
+      updateExtractorUI();
+
+      try {
+        const results = await extractPdfImages(await file.arrayBuffer(), (done, total) => {
+          extEls.progressStatus.textContent = `画像を取り出し中... (${done} / ${total})`;
+          extEls.progressBar.style.width = `${Math.round(done / total * 100)}%`;
+        });
+        extractorImages = results.map((r, i) => ({
+          ...r,
+          id: `img${i}`,
+          url: URL.createObjectURL(r.blob),
+          small: r.width < EXTRACTOR_SMALL_PX || r.height < EXTRACTOR_SMALL_PX,
+          selected: true
+        }));
+      } catch (err) {
+        console.error("画像抽出エラー:", err);
+        const encrypted = err && /encrypt/i.test(String(err.message || err));
+        alert(encrypted ? "パスワードで保護されたPDFからは画像を取り出せません。" : "PDFから画像を取り出す際にエラーが発生しました。");
+        isExtracting = false;
+        resetExtractor();
+        return;
+      }
+      isExtracting = false;
+      updateExtractorUI();
+    }
+
+    function resetExtractor() {
+      if (isExtracting) return;
+      releaseExtractorImages();
+      extEls.fileInput.value = '';
+      extEls.listContainer.classList.add('hidden');
+      setExtractorDropZoneSlim(false);
+      updateExtractorUI();
+    }
+
+    extEls.dropZone.addEventListener('click', () => { if (!isExtracting) extEls.fileInput.click(); });
+    extEls.fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) loadExtractorFile(e.target.files[0]);
+      e.target.value = '';
+    });
+    extEls.dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault(); extEls.dropZone.classList.add('border-amber-400', 'bg-amber-50/30');
+    });
+    extEls.dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault(); extEls.dropZone.classList.remove('border-amber-400', 'bg-amber-50/30');
+    });
+    extEls.dropZone.addEventListener('drop', (e) => {
+      e.preventDefault(); extEls.dropZone.classList.remove('border-amber-400', 'bg-amber-50/30');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) loadExtractorFile(e.dataTransfer.files[0]);
+    });
+
+    extEls.imageList.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action="toggle"]');
+      if (!btn) return;
+      const item = extractorImages.find(it => it.id === btn.dataset.id);
+      if (item) { item.selected = !item.selected; updateExtractorUI(); }
+    });
+
+    extEls.selectAllBtn.addEventListener('click', () => {
+      const visible = visibleExtractorImages();
+      const allSelected = visible.every(item => item.selected);
+      visible.forEach(item => { item.selected = !allSelected; });
+      updateExtractorUI();
+    });
+
+    extEls.hideSmall.addEventListener('change', updateExtractorUI);
+    extEls.clearBtn.addEventListener('click', resetExtractor);
+
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // 1枚ならそのまま、複数ならフォルダ入りのZIPにまとめて保存する
+    extEls.downloadBtn.addEventListener('click', async () => {
+      if (extEls.downloadBtn.disabled) return;
+      const targets = visibleExtractorImages().filter(item => item.selected);
+      if (targets.length === 0) return;
+      if (targets.length === 1) { triggerDownload(targets[0].blob, targets[0].name); return; }
+      if (!window.JSZip) { alert("ZIPライブラリが読み込まれていません。インターネット接続を確認してください。"); return; }
+
+      extEls.downloadBtn.disabled = true;
+      extEls.downloadLabel.textContent = 'ZIP作成中...';
+      try {
+        const folderName = `${extractorBaseName}_画像`;
+        const zip = new JSZip();
+        const folder = zip.folder(folderName);
+        targets.forEach(item => folder.file(item.name, item.blob));
+        // 画像は圧縮済みなので再圧縮せずに格納（速度優先）
+        triggerDownload(await zip.generateAsync({ type: 'blob', compression: 'STORE' }), `${folderName}.zip`);
+      } catch (err) {
+        console.error("ZIP作成エラー:", err);
+        alert("ZIPファイルの作成中にエラーが発生しました。");
+      } finally {
+        updateExtractorUI();
       }
     });
 
